@@ -1,0 +1,29 @@
+/* Import Google Fonts — must precede @tailwind for valid CSS / Vite */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Orange & white — page base */
+body {
+  background-color: #fff7ed;
+  color: #1c1917;
+  min-height: 100vh;
+}
+
+/* Custom scrollbar (orange tones) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #ffedd5;
+}
+::-webkit-scrollbar-thumb {
+  background: #fdba74;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #f97316;
+}

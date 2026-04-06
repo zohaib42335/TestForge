@@ -1,0 +1,32 @@
+rules_version = '2';
+
+// TestForge — user-scoped Firestore access.
+// users/{userId} — optional profile doc
+// users/{userId}/testCases/{docId}
+// users/{userId}/templates/{docId}
+// Only request.auth.uid == userId may read/write these paths.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      match /testCases/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /templates/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}
