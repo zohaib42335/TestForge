@@ -1,10 +1,14 @@
 rules_version = '2';
 
-// TestForge — user-scoped Firestore access.
-// users/{userId} — optional profile doc
-// users/{userId}/testCases/{docId}
-// users/{userId}/templates/{docId}
-// Only request.auth.uid == userId may read/write these paths.
+// TestForge — RBAC + user-scoped data under users/{uid}/...
+// Profile document: users/{uid} (role, email, …)
+// Subcollections: testCases, templates, testRuns, testRunResults
+//
+// IMPORTANT: `allow read: if isSignedIn()` on users/{userId} lets any signed-in user read
+// profile docs. That is required for (1) listing users to pick the first Admin on signup,
+// and (2) Admin Team tab. If you restrict reads to `request.auth.uid == userId` only, the
+// app will still sign users in (client falls back to Tester) but first-user Admin auto
+// and team listing will not work until you widen reads or manage roles in Console.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -13,20 +17,141 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function userProfilePath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function userProfileExists() {
+      return exists(userProfilePath());
+    }
+
+    function getUserRole() {
+      return get(userProfilePath()).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && userProfileExists() && getUserRole() == 'Admin';
+    }
+
+    function isAdminOrLead() {
+      return isSignedIn() && userProfileExists() &&
+        (getUserRole() == 'Admin' || getUserRole() == 'QA Lead');
+    }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function commentTypeValid(t) {
+      return t == 'comment' || t == 'note' || t == 'failure' || t == 'question';
+    }
+
+    function commentCreateAllowed() {
+      return isSignedIn() &&
+        request.resource.data.authorUid == request.auth.uid &&
+        request.resource.data.testCaseId is string &&
+        request.resource.data.testCaseRef is string &&
+        request.resource.data.authorName is string &&
+        request.resource.data.authorInitials is string &&
+        request.resource.data.text is string &&
+        request.resource.data.text.size() > 0 &&
+        request.resource.data.text.size() <= 1000 &&
+        request.resource.data.createdDate is string &&
+        request.resource.data.editedDate == null &&
+        request.resource.data.isEdited == false &&
+        commentTypeValid(request.resource.data.type);
+    }
+
+    function commentImmutableUnchanged() {
+      return request.resource.data.testCaseId == resource.data.testCaseId &&
+        request.resource.data.testCaseRef == resource.data.testCaseRef &&
+        request.resource.data.authorUid == resource.data.authorUid &&
+        request.resource.data.authorName == resource.data.authorName &&
+        request.resource.data.authorInitials == resource.data.authorInitials &&
+        request.resource.data.createdDate == resource.data.createdDate &&
+        request.resource.data.type == resource.data.type;
+    }
+
+    function commentUpdateAllowed() {
+      return isSignedIn() && (
+          resource.data.authorUid == request.auth.uid || isAdmin()
+        ) &&
+        commentImmutableUnchanged() &&
+        request.resource.data.text is string &&
+        request.resource.data.text.size() > 0 &&
+        request.resource.data.text.size() <= 1000 &&
+        request.resource.data.isEdited == true &&
+        request.resource.data.editedDate is string;
+    }
+
+    function roleFieldsUnchanged() {
+      return request.resource.data.role == resource.data.role &&
+        request.resource.data.assignedBy == resource.data.assignedBy;
+    }
+
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      // Team tab: Admins must be able to update *other* users' profile docs (role / assignedBy).
+      // Do not replace this with "request.auth.uid == userId" only — that blocks cross-user role changes.
+      allow update: if isSignedIn() && (
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin'
+        ) ||
+        (
+          request.auth.uid == userId &&
+          roleFieldsUnchanged()
+        )
+      );
+      allow delete: if isAdmin();
 
       match /testCases/{docId} {
-        allow read, write: if isOwner(userId);
+        allow read: if isOwner(userId);
+        allow create, update, delete: if isOwner(userId) && isAdminOrLead();
       }
 
       match /templates/{docId} {
-        allow read, write: if isOwner(userId);
+        allow read: if isOwner(userId);
+        allow create, update, delete: if isOwner(userId) && isAdminOrLead();
       }
+
+      match /testRuns/{docId} {
+        allow read: if isOwner(userId);
+        allow create, delete: if isOwner(userId) && isAdminOrLead();
+        allow update: if isOwner(userId) && isSignedIn();
+      }
+
+      match /testRunResults/{docId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isAdminOrLead();
+        allow update: if isOwner(userId) && isSignedIn();
+        allow delete: if isOwner(userId) && isAdminOrLead();
+      }
+    }
+
+    // Workspace-wide test case library (same documents for Admin, QA Lead, and Tester).
+    match /testCases/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isAdminOrLead();
+      allow update, delete: if isSignedIn() && isAdminOrLead();
+    }
+
+    match /comments/{commentId} {
+      allow read: if isSignedIn();
+      allow create: if commentCreateAllowed();
+      allow update: if commentUpdateAllowed();
+      allow delete: if isSignedIn() && (
+        resource.data.authorUid == request.auth.uid || isAdmin()
+      );
+    }
+
+    match /activityLogs/{logId} {
+      allow read: if isSignedIn() &&
+        (getUserRole() == 'Admin' ||
+         getUserRole() == 'QA Lead');
+      allow create: if isSignedIn();
+      allow update, delete: if false;
     }
   }
 }

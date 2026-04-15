@@ -1,230 +1,200 @@
-/**
- * @fileoverview Firebase Authentication context: Google popup + email/password.
- */
-
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react'
-import {
-  GoogleAuthProvider,
-  createUserWithEmailAndPassword,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  signOut,
-} from 'firebase/auth'
-import {
-  getFirebaseAuth,
-  isFirebaseConfigured,
-  firebaseConfigurationError,
-} from '../firebase/config.js'
+  apiClient,
+  getAccessToken,
+  getMe,
+  login as loginApi,
+  logout as logoutApi,
+  refreshToken as refreshTokenApi,
+  setAccessToken,
+  signup as signupApi,
+} from '../api/auth.api.js'
 
 /**
  * @param {unknown} err
  * @returns {string}
  */
-export function mapFirebaseAuthError(err) {
-  const code =
-    err && typeof err === 'object' && 'code' in err ? String(err.code) : ''
-  const fallback =
-    err && typeof err === 'object' && 'message' in err
-      ? String(err.message)
-      : 'Authentication failed. Please try again.'
-
-  /** @type {Record<string, string>} */
-  const map = {
-    'auth/invalid-email': 'Invalid email address.',
-    'auth/user-disabled': 'This account has been disabled.',
-    'auth/user-not-found': 'No account found with this email.',
-    'auth/wrong-password': 'Incorrect password.',
-    'auth/invalid-credential':
-      'Invalid email or password. If you use Google sign-in, try that instead.',
-    'auth/email-already-in-use': 'That email is already registered. Sign in instead.',
-    'auth/weak-password': 'Password must be at least 6 characters.',
-    'auth/popup-closed-by-user': 'Sign-in was cancelled.',
-    'auth/popup-blocked': 'Pop-up was blocked. Allow pop-ups for this site and try again.',
-    'auth/network-request-failed': 'Network error. Check your connection and try again.',
-    'auth/too-many-requests': 'Too many attempts. Wait a moment and try again.',
-    'auth/operation-not-allowed':
-      'This sign-in method is disabled in Firebase Console. Enable Email/Password and Google.',
-    'auth/account-exists-with-different-credential':
-      'An account already exists with this email using a different sign-in method.',
-  }
-
-  return map[code] || fallback
-}
-
 /** @type {import('react').Context<AuthContextValue|null>} */
 const AuthContext = createContext(null)
 
+const REFRESH_TOKEN_STORAGE_KEY = 'testforge_refresh_token'
+
 /**
  * @typedef {Object} AuthContextValue
- * @property {import('firebase/auth').User|null} user
- * @property {boolean} loading - True until first auth state is known
- * @property {string} configError - Non-empty if Firebase env vars are missing
- * @property {string} authError - Last operation error (user-facing); clear with clearAuthError
- * @property {() => void} clearAuthError
- * @property {() => Promise<void>} signInWithGoogle
- * @property {(email: string, password: string) => Promise<void>} signInWithEmailPassword
- * @property {(email: string, password: string) => Promise<void>} registerWithEmailPassword
- * @property {() => Promise<void>} signOutUser
+ * @property {Record<string, unknown>|null} currentUser
+ * @property {Record<string, unknown>|null} userProfile
+ * @property {boolean} isLoading
+ * @property {boolean} isAuthenticated
+ * @property {(payload: { email: string, password: string }) => Promise<Record<string, unknown>|null>} login
+ * @property {(payload: { displayName: string, email: string, password: string, companyName: string }) => Promise<Record<string, unknown>|null>} signup
+ * @property {() => Promise<void>} logout
+ * @property {(payload: Record<string, unknown>) => void} consumeAuthPayload
+ * @property {boolean} isAdmin
+ * @property {boolean} isQAManager
+ * @property {boolean} isTester
+ * @property {boolean} isViewer
  */
 
 /**
  * @param {{ children: import('react').ReactNode }} props
  */
 export function AuthProvider({ children }) {
-  /** @type {[import('firebase/auth').User|null, React.Dispatch<React.SetStateAction<import('firebase/auth').User|null>>]} */
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [configError] = useState(
-    isFirebaseConfigured ? '' : firebaseConfigurationError,
-  )
-  const [authError, setAuthError] = useState('')
+  const [userProfile, setUserProfile] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  const persistRefreshToken = useCallback((token) => {
+    if (!token) {
+      localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY)
+      return
+    }
+    localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, token)
+  }, [])
+
+  const applySession = useCallback((payload) => {
+    setAccessToken(payload?.accessToken ?? null)
+    persistRefreshToken(payload?.refreshToken ?? null)
+    setUserProfile(payload?.user ?? null)
+  }, [persistRefreshToken])
+
+  const clearSession = useCallback(() => {
+    setAccessToken(null)
+    persistRefreshToken(null)
+    setUserProfile(null)
+  }, [persistRefreshToken])
+
+  const refreshSession = useCallback(async () => {
+    const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)
+    if (!storedRefreshToken) {
+      throw new Error('No refresh token available.')
+    }
+
+    const data = await refreshTokenApi(storedRefreshToken)
+    applySession(data)
+    return data
+  }, [applySession])
 
   useEffect(() => {
-    if (!isFirebaseConfigured) {
-      setLoading(false)
-      setUser(null)
-      return
-    }
+    const interceptorId = apiClient.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        const originalRequest = error?.config
+        const status = error?.response?.status
+        if (status !== 401 || !originalRequest || originalRequest._retry) {
+          return Promise.reject(error)
+        }
 
-    const auth = getFirebaseAuth()
-    if (!auth) {
-      setLoading(false)
-      setAuthError('Firebase Auth could not be initialized.')
-      return
-    }
-
-    const unsub = onAuthStateChanged(
-      auth,
-      (nextUser) => {
-        setUser(nextUser)
-        setLoading(false)
-      },
-      (err) => {
-        setAuthError(mapFirebaseAuthError(err))
-        setUser(null)
-        setLoading(false)
+        originalRequest._retry = true
+        try {
+          await refreshSession()
+          originalRequest.headers = originalRequest.headers ?? {}
+          const token = getAccessToken()
+          if (token) {
+            originalRequest.headers.Authorization = `Bearer ${token}`
+          }
+          return apiClient(originalRequest)
+        } catch (refreshError) {
+          clearSession()
+          return Promise.reject(refreshError)
+        }
       },
     )
 
-    return () => unsub()
-  }, [])
+    return () => apiClient.interceptors.response.eject(interceptorId)
+  }, [clearSession, refreshSession])
 
-  const clearAuthError = useCallback(() => setAuthError(''), [])
+  const login = useCallback(async ({ email, password }) => {
+    const data = await loginApi({ email, password })
+    applySession(data)
+    return data?.user ?? null
+  }, [applySession])
 
-  /**
-   * @returns {Promise<void>}
-   */
-  const signInWithGoogle = useCallback(async () => {
-    setAuthError('')
-    if (!isFirebaseConfigured) {
-      setAuthError(configError || firebaseConfigurationError)
-      return
-    }
-    const auth = getFirebaseAuth()
-    if (!auth) {
-      setAuthError('Firebase Auth is not available.')
-      return
-    }
-    try {
-      const provider = new GoogleAuthProvider()
-      provider.setCustomParameters({ prompt: 'select_account' })
-      await signInWithPopup(auth, provider)
-    } catch (err) {
-      setAuthError(mapFirebaseAuthError(err))
-    }
-  }, [configError])
+  const signup = useCallback(async ({ displayName, email, password, companyName }) => {
+    const data = await signupApi({ displayName, email, password, companyName })
+    applySession(data)
+    return data?.user ?? null
+  }, [applySession])
 
-  /**
-   * @param {string} email
-   * @param {string} password
-   * @returns {Promise<void>}
-   */
-  const signInWithEmailPassword = useCallback(async (email, password) => {
-    setAuthError('')
-    if (!isFirebaseConfigured) {
-      setAuthError(configError || firebaseConfigurationError)
-      return
+  const logout = useCallback(async () => {
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)
+    if (refreshToken) {
+      try {
+        await logoutApi(refreshToken)
+      } catch {
+        // Ignore logout API failures and clear client session regardless.
+      }
     }
-    const auth = getFirebaseAuth()
-    if (!auth) {
-      setAuthError('Firebase Auth is not available.')
-      return
-    }
-    try {
-      await signInWithEmailAndPassword(auth, email.trim(), password)
-    } catch (err) {
-      setAuthError(mapFirebaseAuthError(err))
-    }
-  }, [configError])
+    clearSession()
+  }, [clearSession])
 
-  /**
-   * @param {string} email
-   * @param {string} password
-   * @returns {Promise<void>}
-   */
-  const registerWithEmailPassword = useCallback(async (email, password) => {
-    setAuthError('')
-    if (!isFirebaseConfigured) {
-      setAuthError(configError || firebaseConfigurationError)
-      return
-    }
-    const auth = getFirebaseAuth()
-    if (!auth) {
-      setAuthError('Firebase Auth is not available.')
-      return
-    }
-    try {
-      await createUserWithEmailAndPassword(auth, email.trim(), password)
-    } catch (err) {
-      setAuthError(mapFirebaseAuthError(err))
-    }
-  }, [configError])
+  const consumeAuthPayload = useCallback((payload) => {
+    applySession(payload)
+  }, [applySession])
 
-  /**
-   * @returns {Promise<void>}
-   */
-  const signOutUser = useCallback(async () => {
-    setAuthError('')
-    if (!isFirebaseConfigured) return
-    const auth = getFirebaseAuth()
-    if (!auth) return
-    try {
-      await signOut(auth)
-    } catch (err) {
-      setAuthError(mapFirebaseAuthError(err))
+  useEffect(() => {
+    let mounted = true
+    void (async () => {
+      try {
+        const me = await getMe()
+        if (mounted) {
+          setUserProfile(me)
+        }
+      } catch {
+        try {
+          const refreshed = await refreshSession()
+          if (mounted) {
+            setUserProfile(refreshed?.user ?? null)
+          }
+        } catch {
+          if (mounted) {
+            clearSession()
+          }
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false)
+        }
+      }
+    })()
+
+    return () => {
+      mounted = false
     }
-  }, [])
+  }, [clearSession, refreshSession])
+
+  const role = typeof userProfile?.role === 'string' ? userProfile.role : ''
+  const isAdmin = role === 'ADMIN'
+  const isQAManager = role === 'QA_MANAGER'
+  const isTester = role === 'TESTER'
+  const isViewer = role === 'VIEWER'
+  const isAuthenticated = Boolean(userProfile)
 
   const value = useMemo(
     () => ({
-      user,
-      loading,
-      configError,
-      authError,
-      clearAuthError,
-      signInWithGoogle,
-      signInWithEmailPassword,
-      registerWithEmailPassword,
-      signOutUser,
+      currentUser: userProfile,
+      userProfile,
+      login,
+      signup,
+      logout,
+      consumeAuthPayload,
+      isLoading,
+      isAuthenticated,
+      isAdmin,
+      isQAManager,
+      isTester,
+      isViewer,
     }),
     [
-      user,
-      loading,
-      configError,
-      authError,
-      clearAuthError,
-      signInWithGoogle,
-      signInWithEmailPassword,
-      registerWithEmailPassword,
-      signOutUser,
+      userProfile,
+      login,
+      signup,
+      logout,
+      consumeAuthPayload,
+      isLoading,
+      isAuthenticated,
+      isAdmin,
+      isQAManager,
+      isTester,
+      isViewer,
     ],
   )
 

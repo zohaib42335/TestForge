@@ -1,17 +1,16 @@
-/**
- * @fileoverview State hook for test cases: CRUD, persistence, IDs, sync, export.
- */
-
-import { useCallback, useEffect, useState } from 'react'
-import { DEFAULT_FORM_VALUES } from '../constants/testCaseFields.js'
-import { exportToExcel } from '../utils/excelExport.js'
-import { syncToGoogleSheets } from '../utils/googleSheets.js'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  clearLocalStorage,
-  loadFromLocalStorage,
-  saveToLocalStorage,
-} from '../utils/localStorage.js'
-import { validateTestCase } from '../utils/validation.js'
+  approveTestCase as approveTestCaseApi,
+  bulkUpdateStatus as bulkUpdateStatusApi,
+  createTestCase as createTestCaseApi,
+  deleteTestCase as deleteTestCaseApi,
+  duplicateTestCase as duplicateTestCaseApi,
+  exportTestCases as exportTestCasesApi,
+  getTestCase as getTestCaseApi,
+  getTestCases as getTestCasesApi,
+  importTestCases as importTestCasesApi,
+  updateTestCase as updateTestCaseApi,
+} from '../api/testCases.api.js'
 
 /**
  * Computes the next `TC-###` id from existing test cases (3-digit zero padding).
@@ -48,186 +47,169 @@ function buildNewTestCase(formData, testCaseId) {
 }
 
 /**
- * useTestCases — manages all test case state, CRUD operations,
- * localStorage persistence, ID generation, and sync status.
- * @returns {Object} state and action handlers
+ * useTestCases — manages test case state for Step 3.
+ *
+ * API read:
+ * - Fetches project test cases with server pagination.
+ *
+ * API write:
+ * - `createTestCase(formData)` validates and posts to REST API.
+ *
+ * @returns {{
+ *   testCases: Array<object>,
+ *   loading: boolean,
+ *   error: string,
+ *   isSubmitting: boolean,
+ *   addTestCase: (formData: Record<string, string>) => Promise<{ success: boolean, errors?: Record<string, string>, error?: string }>,
+ *   updateTestCase: (id: string, updatedData: Record<string, string>) => { success: boolean, errors: Record<string, string> },
+ *   deleteTestCase: (id: string) => void,
+ *   syncStatus: { loading: boolean, success: boolean, error: boolean, message: string },
+ *   resetSyncStatus: () => void,
+ *   syncToSheets: (accessToken: string | null) => Promise<any>,
+ *   exportExcel: () => void,
+ *   clearAll: () => void,
+ *   importValidatedTestCases: (validMergedRows: Array<Record<string, string>>) => { success: boolean, imported: number, message: string },
+ * }}
  */
-export function useTestCases() {
+export function useTestCases(projectId, initialFilters = {}) {
   const [testCases, setTestCases] = useState([])
-  const [hasHydrated, setHasHydrated] = useState(false)
-
-  const [syncStatus, setSyncStatus] = useState({
-    loading: false,
-    success: false,
-    error: false,
-    message: '',
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [filters, setFilters] = useState({
+    page: 1,
+    limit: 20,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
+    ...initialFilters,
   })
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+
+  const refetch = useCallback(async (override = {}) => {
+    if (!projectId) return
+    const params = { ...filters, ...override }
+    setLoading(true)
+    setError('')
+    try {
+      const data = await getTestCasesApi(projectId, params)
+      setTestCases(Array.isArray(data?.items) ? data.items : [])
+      setTotal(Number(data?.total || 0))
+      setTotalPages(Number(data?.totalPages || 1))
+      setFilters((prev) => ({ ...prev, ...override }))
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId, filters])
 
   useEffect(() => {
-    setTestCases(loadFromLocalStorage())
-    setHasHydrated(true)
-  }, [])
+    void refetch()
+  }, [refetch])
 
-  useEffect(() => {
-    if (!hasHydrated) return
-    saveToLocalStorage(testCases)
-  }, [testCases, hasHydrated])
+  const createTestCase = useCallback(async (payload) => {
+    const data = await createTestCaseApi(projectId, payload)
+    await refetch()
+    return data
+  }, [projectId, refetch])
 
-  const addTestCase = useCallback((formData) => {
-    const { isValid, errors } = validateTestCase(formData)
-    if (!isValid) {
-      return { success: false, errors }
-    }
+  const updateTestCase = useCallback(async (id, payload) => {
+    const data = await updateTestCaseApi(projectId, id, payload)
+    await refetch()
+    return data
+  }, [projectId, refetch])
 
-    setTestCases((prev) => {
-      const id = generateNextTestCaseId(prev)
-      const row = buildNewTestCase(formData, id)
-      return [...prev, row]
-    })
+  const deleteTestCase = useCallback(async (id) => {
+    const data = await deleteTestCaseApi(projectId, id)
+    await refetch()
+    return data
+  }, [projectId, refetch])
 
-    return { success: true, errors: {} }
-  }, [])
+  const duplicateTestCase = useCallback(async (id) => {
+    const data = await duplicateTestCaseApi(projectId, id)
+    await refetch()
+    return data
+  }, [projectId, refetch])
 
-  const updateTestCase = useCallback((id, updatedData) => {
-    /** @type {{ success: boolean, errors: Record<string, string> }} */
-    let result = {
-      success: false,
-      errors: { testCaseId: 'Test case not found.' },
-    }
+  const bulkUpdateStatus = useCallback(async (ids, status) => {
+    const data = await bulkUpdateStatusApi(projectId, ids, status)
+    await refetch()
+    return data
+  }, [projectId, refetch])
 
-    setTestCases((prev) => {
-      const list = Array.isArray(prev) ? prev : []
-      const idx = list.findIndex(
-        (tc) => tc && String(tc.testCaseId) === String(id),
-      )
-      if (idx === -1) {
-        result = {
-          success: false,
-          errors: { testCaseId: 'Test case not found.' },
-        }
-        return prev
-      }
+  const approveTestCase = useCallback(async (id) => {
+    const data = await approveTestCaseApi(projectId, id)
+    await refetch()
+    return data
+  }, [projectId, refetch])
 
-      const merged = { ...list[idx], ...updatedData }
-      const v = validateTestCase(merged)
-      if (!v.isValid) {
-        result = { success: false, errors: v.errors }
-        return prev
-      }
+  const importTestCases = useCallback(async (rows) => {
+    const data = await importTestCasesApi(projectId, rows)
+    await refetch()
+    return data
+  }, [projectId, refetch])
 
-      const next = [...list]
-      next[idx] = merged
-      result = { success: true, errors: {} }
-      return next
-    })
+  const exportTestCases = useCallback(async () => {
+    return exportTestCasesApi(projectId)
+  }, [projectId])
 
-    return result
-  }, [])
+  const getTestCase = useCallback(async (id) => {
+    return getTestCaseApi(projectId, id)
+  }, [projectId])
 
-  const deleteTestCase = useCallback((id) => {
-    setTestCases((prev) =>
-      (Array.isArray(prev) ? prev : []).filter(
-        (tc) => !tc || String(tc.testCaseId) !== String(id),
-      ),
-    )
-  }, [])
+  const setPage = useCallback((page) => {
+    void refetch({ page })
+  }, [refetch])
 
-  const syncToSheets = useCallback(async (accessToken) => {
-    setSyncStatus({
-      loading: true,
-      success: false,
-      error: false,
-      message: '',
-    })
+  const setSort = useCallback((sortBy, sortOrder) => {
+    void refetch({ sortBy, sortOrder, page: 1 })
+  }, [refetch])
 
-    const result = await syncToGoogleSheets(testCases, accessToken ?? null)
+  const applyFilters = useCallback((next) => {
+    void refetch({ ...next, page: 1 })
+  }, [refetch])
 
-    const ok = result && result.success === true
-    setSyncStatus({
-      loading: false,
-      success: ok,
-      error: !ok,
-      message:
-        result && typeof result.message === 'string' ? result.message : '',
-    })
-
-    return result
-  }, [testCases])
-
-  const exportExcel = useCallback(() => {
-    exportToExcel(testCases)
-  }, [testCases])
-
-  const clearAll = useCallback(() => {
-    setTestCases([])
-    clearLocalStorage()
-    setSyncStatus({
-      loading: false,
-      success: false,
-      error: false,
-      message: '',
-    })
-  }, [])
-
-  const resetSyncStatus = useCallback(() => {
-    setSyncStatus({
-      loading: false,
-      success: false,
-      error: false,
-      message: '',
-    })
-  }, [])
-
-  /**
-   * Appends multiple validated test case payloads with fresh sequential TC-### IDs.
-   * @param {Array<Record<string, string>>} validMergedRows - Full row objects that already pass validateTestCase
-   * @returns {{ success: boolean, imported: number, message: string }}
-   */
-  const importValidatedTestCases = useCallback((validMergedRows) => {
-    if (!Array.isArray(validMergedRows) || validMergedRows.length === 0) {
-      return {
-        success: false,
-        imported: 0,
-        message: 'No valid rows to import.',
-      }
-    }
-
-    setTestCases((prev) => {
-      const list = Array.isArray(prev) ? [...prev] : []
-      let max = 0
-      for (const tc of list) {
-        const raw = tc && tc.testCaseId != null ? String(tc.testCaseId).trim() : ''
-        const m = /^TC-(\d+)$/i.exec(raw)
-        if (m) {
-          const n = parseInt(m[1], 10)
-          if (!Number.isNaN(n)) max = Math.max(max, n)
-        }
-      }
-      for (const data of validMergedRows) {
-        max += 1
-        const id = `TC-${String(max).padStart(3, '0')}`
-        list.push(buildNewTestCase(data, id))
-      }
-      return list
-    })
-
-    return {
-      success: true,
-      imported: validMergedRows.length,
-      message: `${validMergedRows.length} test case(s) imported.`,
-    }
-  }, [])
-
-  return {
+  const state = useMemo(() => ({
     testCases,
-    addTestCase,
+    loading,
+    error,
+    refetch,
+    total,
+    page: filters.page,
+    totalPages,
+    filters,
+    setPage,
+    setSort,
+    applyFilters,
+    createTestCase,
     updateTestCase,
     deleteTestCase,
-    syncStatus,
-    resetSyncStatus,
-    syncToSheets,
-    exportExcel,
-    clearAll,
-    importValidatedTestCases,
-  }
+    duplicateTestCase,
+    bulkUpdateStatus,
+    approveTestCase,
+    importTestCases,
+    exportTestCases,
+    getTestCase,
+  }), [
+    testCases,
+    loading,
+    error,
+    refetch,
+    total,
+    filters.page,
+    totalPages,
+    filters,
+    setPage,
+    setSort,
+    applyFilters,
+    createTestCase,
+    updateTestCase,
+    deleteTestCase,
+    duplicateTestCase,
+    bulkUpdateStatus,
+    approveTestCase,
+    importTestCases,
+    exportTestCases,
+    getTestCase,
+  ])
+
+  return state
 }

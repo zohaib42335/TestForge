@@ -1,0 +1,390 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  TRIALING
+}
+
+enum UserRole {
+  ADMIN
+  QA_MANAGER
+  TESTER
+  VIEWER
+}
+
+enum TestStatus {
+  NOT_RUN
+  PASS
+  FAIL
+  BLOCKED
+  SKIPPED
+}
+
+enum TestPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TestSeverity {
+  CRITICAL
+  MAJOR
+  MINOR
+  TRIVIAL
+}
+
+enum TestType {
+  FUNCTIONAL
+  REGRESSION
+  SMOKE
+  INTEGRATION
+  PERFORMANCE
+  SECURITY
+  USABILITY
+}
+
+enum RunStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum CommentType {
+  COMMENT
+  NOTE
+  FAILURE
+  QUESTION
+}
+
+enum BugStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+}
+
+model Company {
+  id                     String             @id @default(cuid())
+  name                   String
+  slug                   String             @unique
+  plan                   Plan               @default(FREE)
+  subscriptionStatus     SubscriptionStatus @default(ACTIVE)
+  stripeCustomerId       String?            @unique
+  stripeSubscriptionId   String?            @unique
+  stripePriceId          String?
+  maxProjects            Int                @default(1)
+  maxUsers               Int                @default(3)
+  maxTestCasesPerProject Int                @default(50)
+  trialEndsAt            DateTime?
+  subscriptionEndsAt     DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  users       User[]
+  projects    Project[]
+  invitations Invitation[]
+
+  @@map("companies")
+}
+
+model User {
+  id                     String   @id @default(cuid())
+  companyId              String
+  email                  String   @unique
+  passwordHash           String
+  displayName            String
+  role                   UserRole @default(TESTER)
+  isActive               Boolean  @default(true)
+  emailVerified          Boolean  @default(false)
+  lastLoginAt            DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  company                Company  @relation(fields: [companyId], references: [id])
+  projectMemberships     ProjectMember[]
+  createdTestCases       TestCase[]       @relation("CreatedBy")
+  assignedTestCases      TestCase[]       @relation("AssignedTo")
+  approvedTestCases      TestCase[]       @relation("ApprovedBy")
+  testRunResults         TestRunResult[]
+  comments               Comment[]
+  activityLogs           ActivityLog[]
+  sentNotifications      Notification[]   @relation("Sender")
+  receivedNotifications  Notification[]   @relation("Recipient")
+  createdRuns            TestRun[]
+  createdProjects        Project[]
+  createdSuites          TestSuite[]
+  invitationsSent        Invitation[]     @relation("InvitedBy")
+  refreshTokens          RefreshToken[]
+  passwordResetTokens    PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+
+  @@map("users")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_tokens")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Invitation {
+  id          String           @id @default(cuid())
+  companyId   String
+  invitedById String
+  email       String
+  role        UserRole
+  token       String           @unique
+  status      InvitationStatus @default(PENDING)
+  expiresAt   DateTime
+  createdAt   DateTime         @default(now())
+
+  company   Company @relation(fields: [companyId], references: [id])
+  invitedBy User    @relation("InvitedBy", fields: [invitedById], references: [id])
+
+  @@map("invitations")
+}
+
+model Project {
+  id            String   @id @default(cuid())
+  companyId     String
+  name          String
+  description   String?
+  isArchived    Boolean  @default(false)
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company       Company         @relation(fields: [companyId], references: [id])
+  createdBy     User            @relation(fields: [createdById], references: [id])
+  members       ProjectMember[]
+  testSuites    TestSuite[]
+  testCases     TestCase[]
+  testRuns      TestRun[]
+  activityLogs  ActivityLog[]
+  notifications Notification[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  id          String   @id @default(cuid())
+  projectId   String
+  userId      String
+  projectRole UserRole
+  joinedAt    DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+model TestSuite {
+  id          String   @id @default(cuid())
+  projectId   String
+  companyId   String
+  name        String
+  description String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project   Project   @relation(fields: [projectId], references: [id])
+  createdBy User      @relation(fields: [createdById], references: [id])
+  testCases TestCase[]
+
+  @@map("test_suites")
+}
+
+model TestCase {
+  id             String       @id @default(cuid())
+  projectId      String
+  companyId      String
+  suiteId        String?
+  testCaseId     String
+  title          String
+  description    String?
+  preConditions  String?
+  testSteps      Json         @default("[]")
+  expectedResult String?
+  status         TestStatus   @default(NOT_RUN)
+  priority       TestPriority @default(MEDIUM)
+  severity       TestSeverity @default(MINOR)
+  testType       TestType     @default(FUNCTIONAL)
+  tags           String[]     @default([])
+  assignedToId   String?
+  createdById    String
+  isApproved     Boolean      @default(false)
+  approvedById   String?
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  project    Project        @relation(fields: [projectId], references: [id])
+  suite      TestSuite?     @relation(fields: [suiteId], references: [id])
+  assignedTo User?          @relation("AssignedTo", fields: [assignedToId], references: [id])
+  createdBy  User           @relation("CreatedBy", fields: [createdById], references: [id])
+  approvedBy User?          @relation("ApprovedBy", fields: [approvedById], references: [id])
+  runResults TestRunResult[]
+  comments   Comment[]
+
+  @@unique([projectId, testCaseId])
+  @@map("test_cases")
+}
+
+model TestRun {
+  id           String    @id @default(cuid())
+  projectId    String
+  companyId    String
+  name         String
+  description  String?
+  status       RunStatus @default(PENDING)
+  totalCases   Int       @default(0)
+  passCount    Int       @default(0)
+  failCount    Int       @default(0)
+  blockedCount Int       @default(0)
+  skippedCount Int       @default(0)
+  notRunCount  Int       @default(0)
+  createdById  String
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  project   Project         @relation(fields: [projectId], references: [id])
+  createdBy User            @relation(fields: [createdById], references: [id])
+  results   TestRunResult[]
+
+  @@map("test_runs")
+}
+
+model TestRunResult {
+  id           String     @id @default(cuid())
+  runId        String
+  testCaseId   String
+  companyId    String
+  result       TestStatus @default(NOT_RUN)
+  notes        String?
+  executedById String?
+  executedAt   DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  run        TestRun  @relation(fields: [runId], references: [id])
+  testCase   TestCase @relation(fields: [testCaseId], references: [id])
+  executedBy User?    @relation(fields: [executedById], references: [id])
+
+  @@map("test_run_results")
+}
+
+model Comment {
+  id         String      @id @default(cuid())
+  testCaseId String
+  projectId  String
+  companyId  String
+  authorId   String
+  text       String      @db.VarChar(1000)
+  type       CommentType @default(COMMENT)
+  isEdited   Boolean     @default(false)
+  editedAt   DateTime?
+  createdAt  DateTime    @default(now())
+
+  testCase TestCase @relation(fields: [testCaseId], references: [id])
+  author   User     @relation(fields: [authorId], references: [id])
+
+  @@map("comments")
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  companyId  String
+  projectId  String?
+  actorId    String
+  action     String
+  entityType String
+  entityId   String
+  entityRef  String?
+  changes    Json?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  actor   User     @relation(fields: [actorId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+
+  @@map("activity_logs")
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  recipientId String
+  senderId    String?
+  companyId   String
+  projectId   String?
+  type        String
+  title       String
+  message     String
+  entityType  String?
+  entityId    String?
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  recipient User     @relation("Recipient", fields: [recipientId], references: [id])
+  sender    User?    @relation("Sender", fields: [senderId], references: [id])
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  @@map("notifications")
+}
