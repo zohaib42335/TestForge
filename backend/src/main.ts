@@ -8,15 +8,45 @@ import express from 'express';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 
+function normalizeBrowserOrigin(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/\/$/, '');
+}
+
+function buildAllowedOrigins(configService: ConfigService): Set<string> {
+  const fallback = 'https://test-forge-sooty.vercel.app';
+  const fromEnv = configService.get<string>('FRONTEND_URL');
+  const raw = fromEnv?.trim() ? fromEnv : fallback;
+  const set = new Set<string>();
+  for (const part of raw.split(',')) {
+    const o = normalizeBrowserOrigin(part);
+    if (o.length > 0) set.add(o);
+  }
+  return set;
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
-  const frontendUrl = configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
+  const allowedOrigins = buildAllowedOrigins(configService);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
   const port = configService.get<number>('PORT', 3000);
 
   app.enableCors({
-    origin: frontendUrl,
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      const normalized = normalizeBrowserOrigin(origin);
+      if (allowedOrigins.has(normalized)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`CORS blocked origin: ${origin}`));
+    },
     credentials: true,
   });
 
