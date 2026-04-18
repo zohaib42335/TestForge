@@ -35,19 +35,14 @@ async function bootstrap() {
   const port = configService.get<number>('PORT', 3000);
 
   app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-      const normalized = normalizeBrowserOrigin(origin);
-      if (allowedOrigins.has(normalized)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error(`CORS blocked origin: ${origin}`));
-    },
+    origin: process.env.FRONTEND_URL,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+    ],
   });
 
   app.use(
