@@ -19,6 +19,99 @@ import usePlanLimits from './hooks/usePlanLimits.js'
 import Dashboard from './components/Dashboard.jsx'
 import ReportsPage from './pages/ReportsPage.jsx'
 
+function RolePermissionsMatrix() {
+  const rows = [
+    {
+      permission: 'Create projects',
+      ADMIN: true,
+      QA_MANAGER: true,
+      TESTER: false,
+      VIEWER: false,
+    },
+    {
+      permission: 'Update project details',
+      ADMIN: true,
+      QA_MANAGER: true,
+      TESTER: false,
+      VIEWER: false,
+    },
+    {
+      permission: 'Archive projects',
+      ADMIN: true,
+      QA_MANAGER: false,
+      TESTER: false,
+      VIEWER: false,
+    },
+    {
+      permission: 'Invite and manage team members',
+      ADMIN: true,
+      QA_MANAGER: false,
+      TESTER: false,
+      VIEWER: false,
+    },
+    {
+      permission: 'Access billing',
+      ADMIN: true,
+      QA_MANAGER: false,
+      TESTER: false,
+      VIEWER: false,
+    },
+    {
+      permission: 'View reports',
+      ADMIN: true,
+      QA_MANAGER: true,
+      TESTER: false,
+      VIEWER: true,
+    },
+    {
+      permission: 'Work on assigned test cases and runs',
+      ADMIN: true,
+      QA_MANAGER: true,
+      TESTER: true,
+      VIEWER: false,
+    },
+  ]
+
+  const renderCell = (value) => (
+    <span className={value ? 'font-semibold text-green-700' : 'text-[#6B7FA6]'}>
+      {value ? 'Yes' : 'No'}
+    </span>
+  )
+
+  return (
+    <div className="mt-6 rounded-xl border border-[#D7E2F5] bg-white p-6 shadow-sm">
+      <h2 className="text-lg font-semibold text-[#1A3263]">Role Permissions Matrix</h2>
+      <p className="mt-1 text-sm text-[#4D628C]">
+        Quick overview of what each role can do in this workspace.
+      </p>
+      <div className="mt-4 overflow-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="text-[#53698F]">
+            <tr>
+              <th className="py-2 pr-3">Permission</th>
+              <th className="py-2 pr-3">Admin</th>
+              <th className="py-2 pr-3">QA Manager</th>
+              <th className="py-2 pr-3">Tester</th>
+              <th className="py-2 pr-3">Viewer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.permission} className="border-t border-[#EEF2FB]">
+                <td className="py-2 pr-3 text-[#1A3263]">{row.permission}</td>
+                <td className="py-2 pr-3">{renderCell(row.ADMIN)}</td>
+                <td className="py-2 pr-3">{renderCell(row.QA_MANAGER)}</td>
+                <td className="py-2 pr-3">{renderCell(row.TESTER)}</td>
+                <td className="py-2 pr-3">{renderCell(row.VIEWER)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function DashboardPage() {
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6">
@@ -178,7 +271,11 @@ function AppRoutes() {
               <div className="mx-auto w-full max-w-7xl px-4 py-6">
                 <div className="rounded-xl border border-[#D7E2F5] bg-white p-6 shadow-sm">
                   <h1 className="text-2xl font-semibold text-[#1A3263]">Settings</h1>
+                  <p className="mt-2 text-sm text-[#4D628C]">
+                    Manage workspace behavior and review role capabilities.
+                  </p>
                 </div>
+                <RolePermissionsMatrix />
               </div>
             </AppShell>
           </ProtectedRoute>
