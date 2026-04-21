@@ -6,6 +6,7 @@ const api = axios.create({
 })
 
 let accessToken = null
+const PUBLIC_AUTH_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password', '/accept-invite']
 
 export const setAccessToken = (token) => {
   accessToken = token
@@ -38,8 +39,10 @@ api.interceptors.response.use(
         return api(original)
       } catch (refreshError) {
         setAccessToken(null)
-        const onLoginPage = window.location.pathname === '/login'
-        if (!onLoginPage) {
+        const isOnPublicAuthPage = PUBLIC_AUTH_PATHS.some((path) =>
+          window.location.pathname.startsWith(path),
+        )
+        if (!isOnPublicAuthPage) {
           window.location.assign('/login')
         }
         return Promise.reject(refreshError)
