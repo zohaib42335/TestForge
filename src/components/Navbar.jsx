@@ -4,10 +4,51 @@ import { LogoFull } from './Logo.jsx'
 import ProjectSwitcher from './ProjectSwitcher.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 
+const ROLE_META = {
+  ADMIN: { icon: 'shield', color: 'text-[#1A3263]', bg: 'bg-[#EAF0FF]', label: 'Admin' },
+  QA_MANAGER: { icon: 'briefcase', color: 'text-[#1D4ED8]', bg: 'bg-[#EAF3FF]', label: 'QA Manager' },
+  TESTER: { icon: 'check', color: 'text-[#047857]', bg: 'bg-[#E8FAF2]', label: 'Tester' },
+  VIEWER: { icon: 'eye', color: 'text-[#7C3AED]', bg: 'bg-[#F2ECFF]', label: 'Viewer' },
+}
+
+function RoleIcon({ kind }) {
+  if (kind === 'briefcase') {
+    return (
+      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="3" y="7" width="18" height="12" rx="2" />
+        <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      </svg>
+    )
+  }
+  if (kind === 'check') {
+    return (
+      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="9" />
+        <path d="m8 12 2.5 2.5L16 9" />
+      </svg>
+    )
+  }
+  if (kind === 'eye') {
+    return (
+      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+        <circle cx="12" cy="12" r="2.5" />
+      </svg>
+    )
+  }
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 3 5 6v6c0 5 3.5 8 7 9 3.5-1 7-4 7-9V6l-7-3Z" />
+      <path d="m9.5 12 1.8 1.8 3.2-3.2" />
+    </svg>
+  )
+}
+
 export default function Navbar() {
   const navigate = useNavigate()
   const { currentUser, logout, isAdmin } = useAuth()
   const [open, setOpen] = useState(false)
+  const roleMeta = ROLE_META[currentUser?.role] || { icon: 'shield', color: 'text-[#1A3263]', bg: 'bg-[#EAF0FF]', label: 'Member' }
 
   return (
     <header className="sticky top-0 z-40 border-b border-[#C8D7F1] bg-white">
@@ -35,6 +76,10 @@ export default function Navbar() {
                   {currentUser?.displayName || 'User'}
                 </p>
                 <p className="truncate text-xs text-[#5A6E9A]">{currentUser?.email}</p>
+                <div className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium ${roleMeta.bg} ${roleMeta.color}`}>
+                  <RoleIcon kind={roleMeta.icon} />
+                  <span>{roleMeta.label}</span>
+                </div>
               </div>
               <Link
                 to="/settings"
