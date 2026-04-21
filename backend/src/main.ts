@@ -35,26 +35,34 @@ async function bootstrap() {
   const port = configService.get<number>('PORT', 3000);
 
   app.enableCors({
-    origin: (origin, callback) => {
-      const normalized = origin ? normalizeBrowserOrigin(origin) : '';
-      if (!origin) {
-        callback(null, true);
-        return;
+    origin: function (origin, callback) {
+      const allowedOrigins = [
+        process.env.FRONTEND_URL,
+        'http://localhost:5173',
+        'http://localhost:3000',
+      ].filter(Boolean)
+  
+      const isVercelPreview = origin &&
+        origin.endsWith('.vercel.app')
+  
+      if (!origin ||
+          allowedOrigins.includes(origin) ||
+          isVercelPreview) {
+        callback(null, true)
+      } else {
+        callback(new Error('Not allowed by CORS'))
       }
-      if (allowedOrigins.has(normalized)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error(`CORS blocked origin: ${origin}`));
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH',
+              'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
       'Authorization',
       'Accept',
+      'X-Requested-With',
     ],
-  });
+  })
 
   app.use(
     '/api/v1/billing/webhook',

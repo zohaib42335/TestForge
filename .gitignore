@@ -10,8 +10,15 @@ lerna-debug.log*
 node_modules
 dist
 .env
+backend/.env.example
+.env.local
+.env.production
+backend/.env
 dist-ssr
 *.local
+backend/node_modules/
+backend/dist/
+Thumbs.db
 
 # Editor directories and files
 .vscode/*
