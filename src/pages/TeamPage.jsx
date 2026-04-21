@@ -45,6 +45,10 @@ export default function TeamPage() {
 
   const memberRows = useMemo(() => members, [members])
   const pendingRows = useMemo(() => pendingInvitations, [pendingInvitations])
+  const pendingInviteByEmail = useMemo(
+    () => new Map(pendingInvitations.map((invite) => [String(invite.email || '').toLowerCase(), invite])),
+    [pendingInvitations],
+  )
 
   const handleRoleChange = async (userId, role) => {
     try {
@@ -124,6 +128,7 @@ export default function TeamPage() {
             <tbody>
               {memberRows.map((member) => {
                 const isMe = member.id === currentUser?.id
+                const inviteForMember = pendingInviteByEmail.get(String(member.email || '').toLowerCase())
                 return (
                   <tr key={member.id} className={isMe ? 'bg-[#EEF2FB]' : 'border-t border-[#EEF2FB]'}>
                     <td className="py-2 pr-3">
@@ -154,13 +159,24 @@ export default function TeamPage() {
                     <td className="py-2 pr-3">{new Date(member.createdAt).toLocaleDateString()}</td>
                     <td className="py-2 pr-3">
                       {isAdmin && !isMe ? (
-                        <button
-                          type="button"
-                          onClick={() => void handleRemove(member.id)}
-                          className="text-sm font-medium text-red-600 hover:underline"
-                        >
-                          Remove
-                        </button>
+                        <div className="flex gap-3">
+                          {!member.isActive && inviteForMember ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleResend(inviteForMember.id)}
+                              className="text-sm font-medium text-[#1A3263] hover:underline"
+                            >
+                              Resend Invite
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => void handleRemove(member.id)}
+                            className="text-sm font-medium text-red-600 hover:underline"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       ) : (
                         '-'
                       )}
