@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InvitationStatus } from '@prisma/client';
+import { InvitationStatus, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { EmailService } from '../email/email.service';
@@ -134,6 +134,27 @@ export class InvitationsService {
       where: { id: invitation.id },
       data: { status: InvitationStatus.ACCEPTED },
     });
+
+    if (invitation.role === UserRole.QA_MANAGER) {
+      const companyProjects = await this.prisma.project.findMany({
+        where: {
+          companyId: invitation.companyId,
+          isArchived: false,
+        },
+        select: { id: true },
+      });
+
+      if (companyProjects.length > 0) {
+        await this.prisma.projectMember.createMany({
+          data: companyProjects.map((project) => ({
+            projectId: project.id,
+            userId: user.id,
+            projectRole: user.role,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
 
     const tokens = await this.authService.generateTokens(user.id, user.companyId, user.role);
     return {
