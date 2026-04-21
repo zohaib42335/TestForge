@@ -85,6 +85,7 @@ function AppShell({ children }) {
 function AppRoutes() {
   const { isAuthenticated, currentUser } = useAuth()
   const { projects, loading } = useProject()
+  const canCreateProjects = ['ADMIN', 'QA_MANAGER'].includes(currentUser?.role || '')
   const canAccessReports = ['ADMIN', 'QA_MANAGER', 'VIEWER'].includes(currentUser?.role || '')
 
     return (
@@ -105,7 +106,7 @@ function AppRoutes() {
         element={(
           <ProtectedRoute>
             <AppShell>
-              <OnboardingPage />
+              {canCreateProjects ? <OnboardingPage /> : <Navigate to="/dashboard" replace />}
             </AppShell>
           </ProtectedRoute>
         )}
@@ -115,7 +116,11 @@ function AppRoutes() {
         element={(
           <ProtectedRoute>
             <AppShell>
-              {!loading && projects.length === 0 ? <Navigate to="/onboarding" replace /> : <DashboardPage />}
+              {!loading && projects.length === 0 && canCreateProjects ? (
+                <Navigate to="/onboarding" replace />
+              ) : (
+                <DashboardPage />
+              )}
             </AppShell>
           </ProtectedRoute>
         )}

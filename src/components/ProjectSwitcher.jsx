@@ -19,6 +19,7 @@ export default function ProjectSwitcher() {
   const [showLimit, setShowLimit] = useState(false)
 
   const companyName = useMemo(() => currentUser?.companyName || 'Company', [currentUser])
+  const canCreateProjects = ['ADMIN', 'QA_MANAGER'].includes(currentUser?.role || '')
 
   return (
     <div className="relative">
@@ -58,22 +59,24 @@ export default function ProjectSwitcher() {
               </button>
             ))}
           </div>
-          <div className="border-t border-[#E5ECFA] pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false)
-                if (isAtLimit.projects) {
-                  setShowLimit(true)
-                } else {
-                  navigate('/onboarding')
-                }
-              }}
-              className="w-full px-3 py-2 text-left text-sm font-medium text-[#1A3263] hover:bg-[#F5F8FF]"
-            >
-              + Create New Project
-            </button>
-          </div>
+          {canCreateProjects ? (
+            <div className="border-t border-[#E5ECFA] pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  if (isAtLimit.projects) {
+                    setShowLimit(true)
+                  } else {
+                    navigate('/onboarding')
+                  }
+                }}
+                className="w-full px-3 py-2 text-left text-sm font-medium text-[#1A3263] hover:bg-[#F5F8FF]"
+              >
+                + Create New Project
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
       <PlanLimitModal
