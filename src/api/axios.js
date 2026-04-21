@@ -38,7 +38,10 @@ api.interceptors.response.use(
         return api(original)
       } catch (refreshError) {
         setAccessToken(null)
-        window.location.href = '/login'
+        const onLoginPage = window.location.pathname === '/login'
+        if (!onLoginPage) {
+          window.location.assign('/login')
+        }
         return Promise.reject(refreshError)
       }
     }
