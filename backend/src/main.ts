@@ -35,7 +35,18 @@ async function bootstrap() {
   const port = configService.get<number>('PORT', 3000);
 
   app.enableCors({
-    origin: process.env.FRONTEND_URL,
+    origin: (origin, callback) => {
+      const normalized = origin ? normalizeBrowserOrigin(origin) : '';
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (allowedOrigins.has(normalized)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`CORS blocked origin: ${origin}`));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
