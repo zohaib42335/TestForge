@@ -310,6 +310,324 @@
           }
         }
       ]
+    },
+    {
+      "name": "Smoke RBAC Assertions",
+      "item": [
+        {
+          "name": "Admin Create Project => 200/201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin can create project', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"RBAC Smoke Project\",\n  \"description\": \"Created by admin smoke assertion\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects"
+          }
+        },
+        {
+          "name": "Tester Create Project => 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tester cannot create project', function () {",
+                  "  pm.expect(pm.response.code).to.eql(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{testerAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tester Forbidden Project\",\n  \"description\": \"Should fail with 403\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects"
+          }
+        },
+        {
+          "name": "QA Invite User => 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('QA Manager cannot invite users', function () {",
+                  "  pm.expect(pm.response.code).to.eql(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{qaManagerAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"rbac-check@example.com\",\n  \"role\": \"TESTER\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/invitations"
+          }
+        },
+        {
+          "name": "Viewer Create Test Case => 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Viewer cannot create test case', function () {",
+                  "  pm.expect(pm.response.code).to.eql(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewerAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Viewer should fail\",\n  \"description\": \"Forbidden test case create\",\n  \"priority\": \"HIGH\",\n  \"severity\": \"MAJOR\",\n  \"testType\": \"FUNCTIONAL\",\n  \"testSteps\": [\n    {\n      \"order\": 1,\n      \"action\": \"Open page\",\n      \"expectedResult\": \"Page opens\"\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/test-cases"
+          }
+        },
+        {
+          "name": "Tester Update Assigned Run Result => 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tester can update assigned result', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{testerAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"result\": \"PASS\",\n  \"notes\": \"Assigned tester execution\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/runs/{{runId}}/results/{{assignedResultId}}"
+          }
+        },
+        {
+          "name": "Tester Update Unassigned Run Result => 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tester cannot update unassigned result', function () {",
+                  "  pm.expect(pm.response.code).to.eql(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{testerAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"result\": \"FAIL\",\n  \"notes\": \"Should be forbidden\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/runs/{{runId}}/results/{{unassignedResultId}}"
+          }
+        },
+        {
+          "name": "Reports Access Matrix",
+          "item": [
+            {
+              "name": "Admin Reports Overview => 200",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Admin can view reports', function () {",
+                      "  pm.expect(pm.response.code).to.eql(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminAccessToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/reports/overview"
+              }
+            },
+            {
+              "name": "QA Reports Overview => 200",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('QA Manager can view reports', function () {",
+                      "  pm.expect(pm.response.code).to.eql(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{qaManagerAccessToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/reports/overview"
+              }
+            },
+            {
+              "name": "Viewer Reports Overview => 200",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Viewer can view reports', function () {",
+                      "  pm.expect(pm.response.code).to.eql(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{viewerAccessToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/reports/overview"
+              }
+            },
+            {
+              "name": "Tester Reports Overview => 403",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Tester cannot view reports', function () {",
+                      "  pm.expect(pm.response.code).to.eql(403);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{testerAccessToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/reports/overview"
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -339,6 +657,30 @@
     },
     {
       "key": "inviteToken",
+      "value": ""
+    },
+    {
+      "key": "adminAccessToken",
+      "value": ""
+    },
+    {
+      "key": "qaManagerAccessToken",
+      "value": ""
+    },
+    {
+      "key": "testerAccessToken",
+      "value": ""
+    },
+    {
+      "key": "viewerAccessToken",
+      "value": ""
+    },
+    {
+      "key": "assignedResultId",
+      "value": ""
+    },
+    {
+      "key": "unassignedResultId",
       "value": ""
     }
   ]

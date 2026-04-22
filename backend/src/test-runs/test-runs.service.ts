@@ -122,6 +122,8 @@ export class TestRunsService {
                 testCaseId: true,
                 title: true,
                 priority: true,
+                assignedToId: true,
+                assignedTo: { select: { id: true, displayName: true } },
                 suite: { select: { id: true, name: true } },
               },
             },
@@ -172,6 +174,7 @@ export class TestRunsService {
     projectId: string,
     companyId: string,
     executedById: string,
+    role: UserRole,
     dto: UpdateResultDto,
   ) {
     await this.ensureProjectMember(projectId, companyId, executedById);
@@ -183,8 +186,26 @@ export class TestRunsService {
 
     const result = await this.prisma.testRunResult.findFirst({
       where: { id: resultId, runId, companyId },
+      include: {
+        testCase: {
+          select: {
+            id: true,
+            assignedToId: true,
+          },
+        },
+      },
     });
     if (!result) throw new NotFoundException('Run result not found.');
+
+    if (role === UserRole.VIEWER) {
+      throw new ForbiddenException('Viewers cannot execute test runs.');
+    }
+    if (role === UserRole.TESTER) {
+      const assignedToId = result.testCase?.assignedToId || null;
+      if (!assignedToId || assignedToId !== executedById) {
+        throw new ForbiddenException('Testers can update results only for cases assigned to them.');
+      }
+    }
 
     const updatedResult = await this.prisma.testRunResult.update({
       where: { id: resultId },

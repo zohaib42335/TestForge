@@ -1,7 +1,10 @@
 import axios from 'axios'
 
+const FALLBACK_API_URL = 'http://localhost:3000/api/v1'
+const API_BASE_URL = String(import.meta.env.VITE_API_URL || '').trim() || FALLBACK_API_URL
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: API_BASE_URL,
   withCredentials: true,
 })
 
@@ -24,31 +27,6 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const original = error.config
-    if (error.response?.status === 401 && original && !original._retry) {
-      original._retry = true
-      try {
-        const res = await axios.post(
-          import.meta.env.VITE_API_URL + '/auth/refresh',
-          {},
-          { withCredentials: true },
-        )
-        const newToken = res?.data?.data?.accessToken
-        setAccessToken(newToken)
-        original.headers.Authorization = 'Bearer ' + newToken
-        return api(original)
-      } catch (refreshError) {
-        setAccessToken(null)
-        const isOnPublicAuthPage = PUBLIC_AUTH_PATHS.some((path) =>
-          window.location.pathname.startsWith(path),
-        )
-        if (!isOnPublicAuthPage) {
-          window.location.assign('/login')
-        }
-        return Promise.reject(refreshError)
-      }
-    }
-
     if (error.response?.data?.error?.code === 'PLAN_LIMIT_REACHED') {
       window.dispatchEvent(
         new CustomEvent('plan-limit-reached', { detail: error.response.data.error }),

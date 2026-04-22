@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { createCheckoutSession, createPortalSession } from '../api/billing.api.js'
 import usePlanLimits from '../hooks/usePlanLimits.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import PlanLimitModal from '../components/PlanLimitModal.jsx'
 
 function progressClass(percent) {
   if (percent >= 100) return 'bg-red-500'
@@ -9,7 +10,7 @@ function progressClass(percent) {
   return 'bg-[#1A3263]'
 }
 
-function UsageRow({ label, used, max }) {
+function UsageRow({ label, used, max, onOpenLimit }) {
   const percent = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0
   return (
     <div>
@@ -20,6 +21,15 @@ function UsageRow({ label, used, max }) {
       <div className="h-2 rounded bg-[#E6ECFA]">
         <div className={`h-2 rounded ${progressClass(percent)}`} style={{ width: `${percent}%` }} />
       </div>
+      {percent >= 100 ? (
+        <button
+          type="button"
+          onClick={onOpenLimit}
+          className="mt-1 text-xs font-semibold text-[#1A3263] underline"
+        >
+          Limit reached
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -28,40 +38,40 @@ export default function BillingPage() {
   const { isAdmin } = useAuth()
   const { loading, plan, subscriptionStatus, usage, limits, nextBillingDate } = usePlanLimits()
   const [busyPlan, setBusyPlan] = useState('')
+  const [limitModal, setLimitModal] = useState({ open: false, limitType: 'projects' })
 
   const cards = useMemo(
     () => [
       {
         key: 'FREE',
         title: 'FREE',
-        features: ['1 project', '3 users', '50 test cases', 'Core features only'],
+        price: '$0/mo',
+        features: ['1 project', '3 users', '50 test cases', 'Core features'],
       },
       {
         key: 'STARTER',
         title: 'STARTER',
+        price: '$19/mo',
         features: [
           '5 projects',
           '10 users',
           '500 test cases',
-          'Google Sheets sync',
           'Excel import/export',
-          'Template library',
           'Email notifications',
         ],
       },
       {
         key: 'PROFESSIONAL',
         title: 'PROFESSIONAL',
+        price: '$49/mo',
         popular: true,
         features: [
           '20 projects',
           '50 users',
           'Unlimited test cases',
           'Everything in Starter',
-          'Activity log & audit trail',
           'Advanced reports',
-          'Screenshot attachments',
-          'Bug reporting',
+          'Activity log',
         ],
       },
     ],
@@ -106,9 +116,24 @@ export default function BillingPage() {
       <div className="rounded-xl border border-[#D7E2F5] bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-[#1A3263]">Usage</h2>
         <div className="mt-4 space-y-4">
-          <UsageRow label="Projects" used={usage.projects.used} max={limits.projects} />
-          <UsageRow label="Team Members" used={usage.users.used} max={limits.users} />
-          <UsageRow label="Test Cases" used={usage.testCases.used} max={limits.testCases} />
+          <UsageRow
+            label="Projects"
+            used={usage.projects.used}
+            max={limits.projects}
+            onOpenLimit={() => setLimitModal({ open: true, limitType: 'projects' })}
+          />
+          <UsageRow
+            label="Team Members"
+            used={usage.users.used}
+            max={limits.users}
+            onOpenLimit={() => setLimitModal({ open: true, limitType: 'users' })}
+          />
+          <UsageRow
+            label="Test Cases"
+            used={usage.testCases.used}
+            max={limits.testCases}
+            onOpenLimit={() => setLimitModal({ open: true, limitType: 'testCases' })}
+          />
         </div>
       </div>
 
@@ -128,6 +153,7 @@ export default function BillingPage() {
                 </span>
               ) : null}
               <h3 className="text-xl font-semibold text-[#1A3263]">{card.title}</h3>
+              <p className="mt-1 text-sm font-semibold text-[#5A6E9A]">{card.price}</p>
               <ul className="mt-3 space-y-2 text-sm text-[#4B5F87]">
                 {card.features.map((feature) => (
                   <li key={feature}>+ {feature}</li>
@@ -168,6 +194,13 @@ export default function BillingPage() {
           Manage Invoices
         </button>
       </div>
+      <PlanLimitModal
+        open={limitModal.open}
+        onClose={() => setLimitModal({ open: false, limitType: 'projects' })}
+        limitType={limitModal.limitType}
+        used={usage?.[limitModal.limitType]?.used || 0}
+        max={usage?.[limitModal.limitType]?.max || 0}
+      />
     </div>
   )
 }

@@ -188,7 +188,12 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token.');
     }
 
-    await this.prisma.refreshToken.delete({ where: { id: matchingToken.id } });
+    const deleted = await this.prisma.refreshToken.deleteMany({
+      where: { id: matchingToken.id },
+    });
+    if (deleted.count === 0) {
+      throw new UnauthorizedException('Invalid or expired refresh token.');
+    }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -222,7 +227,7 @@ export class AuthService {
       return { message: 'Logged out.' };
     }
 
-    await this.prisma.refreshToken.delete({ where: { id: matchingToken.id } });
+    await this.prisma.refreshToken.deleteMany({ where: { id: matchingToken.id } });
     return { message: 'Logged out.' };
   }
 
@@ -318,15 +323,29 @@ export class AuthService {
     incomingToken: string,
     now: Date,
   ) {
+    if (!incomingToken || typeof incomingToken !== 'string') {
+      return null;
+    }
+
     for (const record of records) {
       if (record.expiresAt < now) {
-        await this.prisma.refreshToken.delete({ where: { id: record.id } });
+        await this.prisma.refreshToken.deleteMany({ where: { id: record.id } });
         continue;
       }
 
-      const matches = await bcrypt.compare(incomingToken, record.tokenHash);
-      if (matches) {
-        return record;
+      if (!record.tokenHash || typeof record.tokenHash !== 'string') {
+        await this.prisma.refreshToken.deleteMany({ where: { id: record.id } });
+        continue;
+      }
+
+      try {
+        const matches = await bcrypt.compare(incomingToken, record.tokenHash);
+        if (matches) {
+          return record;
+        }
+      } catch {
+        // If stored hash is malformed/corrupt, remove it and continue safely.
+        await this.prisma.refreshToken.deleteMany({ where: { id: record.id } });
       }
     }
 

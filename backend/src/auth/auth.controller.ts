@@ -2,8 +2,10 @@ import {
   Body,
   Controller,
   Get,
+  HttpException,
   Post,
   Query,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
@@ -36,8 +38,15 @@ export class AuthController {
   @Public()
   @Post('refresh')
   async refresh(@Body() dto: RefreshTokenDto) {
-    const userId = await this.authService.getUserIdFromRefreshToken(dto.refreshToken);
-    return this.authService.refreshTokens(userId, dto);
+    try {
+      const userId = await this.authService.getUserIdFromRefreshToken(dto.refreshToken);
+      return this.authService.refreshTokens(userId, dto);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new UnauthorizedException('Invalid refresh token.');
+    }
   }
 
   @UseGuards(JwtAuthGuard)

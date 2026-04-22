@@ -11,6 +11,14 @@ import {
 import { useAuth } from '../context/AuthContext.jsx'
 import usePlanLimits from '../hooks/usePlanLimits.js'
 import PlanLimitModal from '../components/PlanLimitModal.jsx'
+import ConfirmDialog from '../components/ConfirmDialog.jsx'
+
+const ROLE_BADGE = {
+  ADMIN: 'bg-[#EEF2FB] text-[#1A3263]',
+  QA_MANAGER: 'bg-green-100 text-green-700',
+  TESTER: 'bg-blue-100 text-blue-700',
+  VIEWER: 'bg-gray-100 text-gray-700',
+}
 
 export default function TeamPage() {
   const { currentUser, isAdmin } = useAuth()
@@ -21,6 +29,8 @@ export default function TeamPage() {
   const [error, setError] = useState('')
   const [inviteOpen, setInviteOpen] = useState(false)
   const [showLimitModal, setShowLimitModal] = useState(false)
+  const [removeUserId, setRemoveUserId] = useState('')
+  const [cancelInviteId, setCancelInviteId] = useState('')
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -107,8 +117,13 @@ export default function TeamPage() {
         ) : null}
       </div>
 
-      {error ? <p className="mb-4 text-sm text-red-700">{error}</p> : null}
-      {loading ? <p className="text-sm text-[#4B5F87]">Loading team...</p> : null}
+      {error ? (
+        <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <p>{error}</p>
+          <button type="button" onClick={() => void loadData()} className="mt-2 underline">Try Again</button>
+        </div>
+      ) : null}
+      {loading ? <div className="mb-4 h-16 animate-pulse rounded-xl bg-[#D6E0F5]" /> : null}
 
       <div className="rounded-xl border border-[#D7E2F5] bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-lg font-semibold text-[#1A3263]">Team Members</h2>
@@ -152,11 +167,16 @@ export default function TeamPage() {
                           <option value="VIEWER">Viewer</option>
                         </select>
                       ) : (
-                        member.role
+                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${ROLE_BADGE[member.role] || 'bg-[#EEF2FB] text-[#1A3263]'}`}>
+                          {member.role}
+                        </span>
                       )}
                     </td>
                     <td className="py-2 pr-3">{member.isActive ? 'Active' : 'Pending'}</td>
-                    <td className="py-2 pr-3">{new Date(member.createdAt).toLocaleDateString()}</td>
+                    <td className="py-2 pr-3">
+                      {new Date(member.createdAt).toLocaleDateString()}
+                      {isMe ? <span className="ml-2 text-xs text-[#5A6E9A]">(You)</span> : null}
+                    </td>
                     <td className="py-2 pr-3">
                       {isAdmin && !isMe ? (
                         <div className="flex gap-3">
@@ -171,7 +191,7 @@ export default function TeamPage() {
                           ) : null}
                           <button
                             type="button"
-                            onClick={() => void handleRemove(member.id)}
+                            onClick={() => setRemoveUserId(member.id)}
                             className="text-sm font-medium text-red-600 hover:underline"
                           >
                             Remove
@@ -206,7 +226,11 @@ export default function TeamPage() {
               {pendingRows.map((invite) => (
                 <tr key={invite.id} className="border-t border-[#EEF2FB]">
                   <td className="py-2 pr-3">{invite.email}</td>
-                  <td className="py-2 pr-3">{invite.role}</td>
+                  <td className="py-2 pr-3">
+                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${ROLE_BADGE[invite.role] || 'bg-[#EEF2FB] text-[#1A3263]'}`}>
+                      {invite.role}
+                    </span>
+                  </td>
                   <td className="py-2 pr-3">{invite.invitedBy?.displayName || 'Unknown'}</td>
                   <td className="py-2 pr-3">{new Date(invite.expiresAt).toLocaleString()}</td>
                   <td className="py-2 pr-3">
@@ -220,7 +244,7 @@ export default function TeamPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => void handleCancelInvite(invite.id)}
+                        onClick={() => setCancelInviteId(invite.id)}
                         className="text-red-600 hover:underline"
                       >
                         Cancel
@@ -245,6 +269,32 @@ export default function TeamPage() {
         limitType="users"
         used={usage.users.used}
         max={usage.users.max}
+      />
+      <ConfirmDialog
+        open={Boolean(removeUserId)}
+        title="Are you sure?"
+        description="This user will be removed from your company."
+        confirmLabel="Remove User"
+        confirmVariant="danger"
+        onCancel={() => setRemoveUserId('')}
+        onConfirm={async () => {
+          if (!removeUserId) return
+          await handleRemove(removeUserId)
+          setRemoveUserId('')
+        }}
+      />
+      <ConfirmDialog
+        open={Boolean(cancelInviteId)}
+        title="Are you sure?"
+        description="This pending invitation will be cancelled."
+        confirmLabel="Cancel Invitation"
+        confirmVariant="primary"
+        onCancel={() => setCancelInviteId('')}
+        onConfirm={async () => {
+          if (!cancelInviteId) return
+          await handleCancelInvite(cancelInviteId)
+          setCancelInviteId('')
+        }}
       />
     </div>
   )

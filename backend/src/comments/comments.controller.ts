@@ -9,8 +9,9 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { CommentType } from '@prisma/client';
+import { CommentType, UserRole } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreateCommentDto } from './dto/create-comment.dto';
@@ -21,6 +22,7 @@ import { CommentsService } from './comments.service';
 export class CommentsController {
   constructor(private readonly commentsService: CommentsService) {}
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER, UserRole.TESTER)
   @Post('test-cases/:testCaseId/comments')
   addComment(
     @Param('testCaseId') testCaseId: string,

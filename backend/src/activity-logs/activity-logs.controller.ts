@@ -1,5 +1,7 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { ActivityLogsService } from './activity-logs.service';
@@ -9,6 +11,7 @@ import { ActivityLogsService } from './activity-logs.service';
 export class ActivityLogsController {
   constructor(private readonly activityLogsService: ActivityLogsService) {}
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER)
   @Get('projects/:projectId/activity')
   getLogs(
     @Param('projectId') projectId: string,
@@ -30,6 +33,7 @@ export class ActivityLogsController {
     });
   }
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER)
   @Get('activity/:entityId/entity')
   getEntityLogs(
     @Param('entityId') entityId: string,

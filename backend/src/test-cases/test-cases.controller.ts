@@ -9,7 +9,9 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { BulkUpdateStatusDto } from './dto/bulk-update-status.dto';
@@ -27,6 +29,7 @@ export class TestCasesController {
     private readonly testCasesImportService: TestCasesImportService,
   ) {}
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER)
   @Post()
   createTestCase(
     @Param('projectId') projectId: string,
@@ -45,6 +48,7 @@ export class TestCasesController {
     return this.testCasesService.getTestCases(projectId, user.companyId, filterDto);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER)
   @Get('export')
   exportTestCases(
     @Param('projectId') projectId: string,
@@ -53,6 +57,7 @@ export class TestCasesController {
     return this.testCasesService.exportTestCases(projectId, user.companyId);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER)
   @Post('import')
   importTestCases(
     @Param('projectId') projectId: string,
@@ -76,6 +81,7 @@ export class TestCasesController {
     return this.testCasesService.getTestCase(id, projectId, user.companyId);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER)
   @Patch(':id')
   updateTestCase(
     @Param('projectId') projectId: string,
@@ -93,6 +99,7 @@ export class TestCasesController {
     );
   }
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER)
   @Delete(':id')
   deleteTestCase(
     @Param('projectId') projectId: string,
@@ -102,6 +109,7 @@ export class TestCasesController {
     return this.testCasesService.deleteTestCase(id, projectId, user.companyId, user.userId, user.role);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER)
   @Post(':id/duplicate')
   duplicateTestCase(
     @Param('projectId') projectId: string,
@@ -111,6 +119,7 @@ export class TestCasesController {
     return this.testCasesService.duplicateTestCase(id, projectId, user.companyId, user.userId);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER)
   @Patch('bulk-status')
   bulkUpdateStatus(
     @Param('projectId') projectId: string,
@@ -127,6 +136,7 @@ export class TestCasesController {
     );
   }
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER)
   @Post(':id/approve')
   approveTestCase(
     @Param('projectId') projectId: string,

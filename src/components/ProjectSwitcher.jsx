@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useProject } from '../hooks/useProject.js'
-import { useAuth } from '../context/AuthContext.jsx'
 import usePlanLimits from '../hooks/usePlanLimits.js'
 import PlanLimitModal from './PlanLimitModal.jsx'
+import usePermissions from '../hooks/usePermissions.js'
 
 function truncate(value, max = 28) {
   if (!value) return ''
@@ -13,13 +13,13 @@ function truncate(value, max = 28) {
 export default function ProjectSwitcher() {
   const navigate = useNavigate()
   const { projects, activeProject, setActiveProject } = useProject()
-  const { currentUser } = useAuth()
+  const { role } = usePermissions()
   const { isAtLimit, usage } = usePlanLimits()
   const [open, setOpen] = useState(false)
   const [showLimit, setShowLimit] = useState(false)
 
-  const companyName = useMemo(() => currentUser?.companyName || 'Company', [currentUser])
-  const canCreateProjects = ['ADMIN', 'QA_MANAGER'].includes(currentUser?.role || '')
+  const companyName = useMemo(() => 'Company', [])
+  const canCreateProjects = ['ADMIN', 'QA_MANAGER'].includes(role || '')
 
   return (
     <div className="relative">
@@ -47,7 +47,7 @@ export default function ProjectSwitcher() {
                 onClick={() => {
                   setActiveProject(project.id)
                   setOpen(false)
-                  navigate('/dashboard')
+                  navigate(`/projects/${project.id}/test-cases`)
                 }}
                 className={`w-full px-3 py-2 text-left text-sm ${
                   activeProject?.id === project.id
@@ -55,7 +55,8 @@ export default function ProjectSwitcher() {
                     : 'text-[#334A75] hover:bg-[#F5F8FF]'
                 }`}
               >
-                {truncate(project.name)}
+                <span>{truncate(project.name)}</span>
+                {activeProject?.id === project.id ? <span className="ml-2 text-xs">✓</span> : null}
               </button>
             ))}
           </div>

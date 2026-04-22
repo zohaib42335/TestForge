@@ -55,6 +55,8 @@ function formatCreatedDate(v) {
  * @param {number} [props.commentCount] - Comment count for this row (badge when &gt; 0)
  * @param {(row: Record<string, unknown>) => void} [props.onOpenDetail] - Opens slide-out (ignored when `detailOpenDisabled`)
  * @param {boolean} [props.detailOpenDisabled] - When true, row clicks do not open the detail panel
+ * @param {boolean} [props.showView]
+ * @param {(row: Record<string, unknown>) => void} [props.onView]
  */
 export default function TestCaseRow({
   testCase,
@@ -71,6 +73,8 @@ export default function TestCaseRow({
   commentCount = 0,
   onOpenDetail,
   detailOpenDisabled = false,
+  showView = false,
+  onView,
 }) {
   const id = testCase?.testCaseId ?? ''
   const docId = testCase?.id ?? null
@@ -194,6 +198,15 @@ export default function TestCaseRow({
             className="mr-2 px-3 py-1 rounded-lg text-xs font-semibold text-[#1A3263] hover:text-[#122247] transition disabled:opacity-50"
           >
             Edit
+          </button>
+        ) : null}
+        {showView ? (
+          <button
+            type="button"
+            onClick={() => (typeof onView === 'function' ? onView(testCase) : onOpenDetail?.(testCase))}
+            className="mr-2 px-3 py-1 rounded-lg text-xs font-semibold text-[#1A3263] hover:text-[#122247] transition"
+          >
+            View
           </button>
         ) : null}
         {typeof onDuplicate === 'function' && (

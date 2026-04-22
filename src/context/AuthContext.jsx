@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   apiClient,
   getAccessToken,
@@ -41,6 +41,7 @@ const REFRESH_TOKEN_STORAGE_KEY = 'testforge_refresh_token'
 export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const refreshInFlightRef = useRef(null)
 
   const persistRefreshToken = useCallback((token) => {
     if (!token) {
@@ -63,14 +64,26 @@ export function AuthProvider({ children }) {
   }, [persistRefreshToken])
 
   const refreshSession = useCallback(async () => {
+    if (refreshInFlightRef.current) {
+      return refreshInFlightRef.current
+    }
+
     const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)
     if (!storedRefreshToken) {
       throw new Error('No refresh token available.')
     }
 
-    const data = await refreshTokenApi(storedRefreshToken)
-    applySession(data)
-    return data
+    const request = refreshTokenApi(storedRefreshToken)
+      .then((data) => {
+        applySession(data)
+        return data
+      })
+      .finally(() => {
+        refreshInFlightRef.current = null
+      })
+
+    refreshInFlightRef.current = request
+    return request
   }, [applySession])
 
   useEffect(() => {
@@ -79,7 +92,9 @@ export function AuthProvider({ children }) {
       async (error) => {
         const originalRequest = error?.config
         const status = error?.response?.status
-        if (status !== 401 || !originalRequest || originalRequest._retry) {
+        const requestUrl = String(originalRequest?.url || '')
+        const isRefreshCall = requestUrl.includes('/auth/refresh')
+        if (status !== 401 || !originalRequest || originalRequest._retry || isRefreshCall) {
           return Promise.reject(error)
         }
 

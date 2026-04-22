@@ -14,6 +14,7 @@ import { ProjectsService } from './projects.service';
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER)
   @Post()
   createProject(
     @CurrentUser() user: { companyId: string; userId: string },

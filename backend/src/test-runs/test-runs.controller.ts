@@ -9,7 +9,9 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreateRunDto } from './dto/create-run.dto';
@@ -21,6 +23,7 @@ import { TestRunsService } from './test-runs.service';
 export class TestRunsController {
   constructor(private readonly testRunsService: TestRunsService) {}
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER)
   @Post()
   createRun(
     @Param('projectId') projectId: string,
@@ -57,6 +60,7 @@ export class TestRunsController {
     return this.testRunsService.getRun(runId, projectId, user.companyId);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER, UserRole.TESTER)
   @Post(':id/start')
   startRun(
     @Param('projectId') projectId: string,
@@ -66,12 +70,13 @@ export class TestRunsController {
     return this.testRunsService.startRun(runId, projectId, user.companyId, user.userId);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER, UserRole.TESTER)
   @Patch(':id/results/:resultId')
   updateResult(
     @Param('projectId') projectId: string,
     @Param('id') runId: string,
     @Param('resultId') resultId: string,
-    @CurrentUser() user: { companyId: string; userId: string },
+    @CurrentUser() user: { companyId: string; userId: string; role: import('@prisma/client').UserRole },
     @Body() dto: UpdateResultDto,
   ) {
     return this.testRunsService.updateResult(
@@ -80,10 +85,12 @@ export class TestRunsController {
       projectId,
       user.companyId,
       user.userId,
+      user.role,
       dto,
     );
   }
 
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER)
   @Delete(':id')
   deleteRun(
     @Param('projectId') projectId: string,

@@ -12,7 +12,7 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Get('overview')
-  @Roles(UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER, UserRole.VIEWER)
   getOverview(
     @Param('projectId') projectId: string,
     @CurrentUser() user: { companyId: string },
@@ -21,7 +21,7 @@ export class ReportsController {
   }
 
   @Get('runs/:runId')
-  @Roles(UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER, UserRole.VIEWER)
   getExecutionReport(
     @Param('projectId') projectId: string,
     @Param('runId') runId: string,
@@ -31,7 +31,7 @@ export class ReportsController {
   }
 
   @Get('coverage')
-  @Roles(UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER, UserRole.VIEWER)
   getCoverage(
     @Param('projectId') projectId: string,
     @CurrentUser() user: { companyId: string },
@@ -40,7 +40,7 @@ export class ReportsController {
   }
 
   @Get('trends')
-  @Roles(UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.QA_MANAGER, UserRole.VIEWER)
   getTrends(
     @Param('projectId') projectId: string,
     @CurrentUser() user: { companyId: string },

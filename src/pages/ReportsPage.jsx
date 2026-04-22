@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { getRuns } from '../api/testRuns.api.js'
 import {
   getCoverageReport,
@@ -7,6 +8,10 @@ import {
   getTrendReport,
 } from '../api/reports.api.js'
 import useProject from '../hooks/useProject.js'
+import usePermissions from '../hooks/usePermissions.js'
+import { useToast } from '../components/Toast.jsx'
+import LoadingState from '../components/LoadingState.jsx'
+import ErrorState from '../components/ErrorState.jsx'
 
 function LineChart({ data = [] }) {
   const width = 860
@@ -38,7 +43,12 @@ function minutesToDuration(minutes) {
 }
 
 export default function ReportsPage() {
+  const navigate = useNavigate()
+  const showToast = useToast()
+  const { can, role } = usePermissions()
+  const { projectId: routeProjectId } = useParams()
   const { activeProject } = useProject()
+  const projectId = routeProjectId || activeProject?.id
   const [section, setSection] = useState('overview')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -48,17 +58,25 @@ export default function ReportsPage() {
   const [runs, setRuns] = useState([])
   const [selectedRunId, setSelectedRunId] = useState('')
   const [execution, setExecution] = useState(null)
+  const deniedReports = role === 'TESTER' || !can('viewReports')
+
+  useEffect(() => {
+    if (deniedReports) {
+      showToast("You don't have access to reports", 'info')
+      navigate('/dashboard', { replace: true })
+    }
+  }, [deniedReports, navigate, showToast])
 
   const loadOverview = useCallback(async () => {
-    if (!activeProject?.id) return
+    if (!projectId || deniedReports) return
     setLoading(true)
     setError('')
     try {
       const [overviewData, coverageData, trendData, runsData] = await Promise.all([
-        getOverviewReport(activeProject.id),
-        getCoverageReport(activeProject.id),
-        getTrendReport(activeProject.id, 30),
-        getRuns(activeProject.id, { page: 1, limit: 100 }),
+        getOverviewReport(projectId),
+        getCoverageReport(projectId),
+        getTrendReport(projectId, 30),
+        getRuns(projectId, { page: 1, limit: 100 }),
       ])
       setOverview(overviewData)
       setCoverage(coverageData)
@@ -73,23 +91,23 @@ export default function ReportsPage() {
     } finally {
       setLoading(false)
     }
-  }, [activeProject?.id, selectedRunId])
+  }, [projectId, selectedRunId, deniedReports])
 
   useEffect(() => {
     void loadOverview()
   }, [loadOverview])
 
   useEffect(() => {
-    if (!activeProject?.id || !selectedRunId) return
+    if (!projectId || !selectedRunId || deniedReports) return
     void (async () => {
       try {
-        const data = await getExecutionReport(activeProject.id, selectedRunId)
+        const data = await getExecutionReport(projectId, selectedRunId)
         setExecution(data)
       } catch (err) {
         setError(err?.response?.data?.error?.message || 'Could not load execution report.')
       }
     })()
-  }, [activeProject?.id, selectedRunId])
+  }, [projectId, selectedRunId, deniedReports])
 
   const priorityRows = useMemo(
     () => Object.entries(overview?.byPriority || {}).sort((a, b) => b[1] - a[1]),
@@ -127,7 +145,7 @@ export default function ReportsPage() {
       XLSX.utils.json_to_sheet(trends || []),
       'Trends',
     )
-    XLSX.writeFile(wb, `testforge-overview-${activeProject?.name || 'project'}.xlsx`)
+    XLSX.writeFile(wb, `testforge-overview-${activeProject?.name || projectId || 'project'}.xlsx`)
   }
 
   const exportExecutionAsPdf = () => {
@@ -151,11 +169,11 @@ export default function ReportsPage() {
     printWindow.print()
   }
 
-  if (!activeProject?.id) {
+  if (!projectId) {
     return <div className="rounded-xl border border-[#D7E2F5] bg-white p-4 text-sm text-[#4B5F87]">Select a project to view reports.</div>
   }
-  if (loading && !overview) return <div className="rounded-xl border bg-white p-4 text-sm">Loading reports...</div>
-  if (error) return <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+  if (loading && !overview) return <LoadingState lines={5} />
+  if (error) return <ErrorState message={error} onRetry={() => void loadOverview()} />
 
   return (
     <div className="space-y-5">

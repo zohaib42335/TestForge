@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useRunExecution } from '../../hooks/useRunExecution.js'
 import { useToast } from '../Toast.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
 
 function statusLabel(value) {
   const map = {
@@ -15,8 +16,10 @@ function statusLabel(value) {
 
 export default function ExecutionMode({ projectId, runId, onExit }) {
   const showToast = useToast()
+  const { currentUser } = useAuth()
   const { run, results, loading, error, computedStats, updateResult } = useRunExecution(projectId, runId)
   const [pendingIds, setPendingIds] = useState(new Set())
+  const [notesById, setNotesById] = useState({})
 
   const orderedResults = useMemo(() => {
     const clone = [...results]
@@ -31,7 +34,7 @@ export default function ExecutionMode({ projectId, runId, onExit }) {
   const onSetResult = async (row, nextResult) => {
     setPendingIds((prev) => new Set(prev).add(row.id))
     try {
-      await updateResult(row.id, { result: nextResult, notes: row.notes || '' })
+      await updateResult(row.id, { result: nextResult, notes: notesById[row.id] ?? row.notes ?? '' })
     } catch (err) {
       showToast(err?.response?.data?.error?.message || err?.message || 'Failed to update result.', 'error')
     } finally {
@@ -41,6 +44,15 @@ export default function ExecutionMode({ projectId, runId, onExit }) {
         return next
       })
     }
+  }
+
+  const canEditResult = (row) => {
+    const role = currentUser?.role
+    if (role === 'ADMIN' || role === 'QA_MANAGER') return true
+    if (role === 'TESTER') {
+      return row?.testCase?.assignedToId && row.testCase.assignedToId === currentUser?.id
+    }
+    return false
   }
 
   return (
@@ -69,17 +81,47 @@ export default function ExecutionMode({ projectId, runId, onExit }) {
                   <div>
                     <p className="text-xs text-[#5A6E9A]">{row.testCase?.testCaseId || row.testCaseId}</p>
                     <p className="text-sm font-medium text-[#1A3263]">{row.testCase?.title || row.testCaseTitle}</p>
+                    <p className="text-xs text-[#5A6E9A]">
+                      Assigned to: {row.testCase?.assignedTo?.displayName || 'Unassigned'}
+                    </p>
                   </div>
                   <span className="rounded-full bg-[#EEF2FB] px-2 py-1 text-xs text-[#1A3263]">
                     {statusLabel(row.result)}
                   </span>
                 </div>
+                {!canEditResult(row) ? (
+                  <p className="mb-2 text-xs text-[#5A6E9A]">
+                    View only: testers can execute only test cases assigned to them.
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
-                  <ActionButton label="Pass" color="green" disabled={pendingIds.has(row.id)} onClick={() => onSetResult(row, 'PASS')} />
-                  <ActionButton label="Fail" color="red" disabled={pendingIds.has(row.id)} onClick={() => onSetResult(row, 'FAIL')} />
-                  <ActionButton label="Blocked" color="amber" disabled={pendingIds.has(row.id)} onClick={() => onSetResult(row, 'BLOCKED')} />
-                  <ActionButton label="Skip" color="gray" disabled={pendingIds.has(row.id)} onClick={() => onSetResult(row, 'SKIPPED')} />
+                  <ActionButton label="Pass" color="green" disabled={pendingIds.has(row.id) || !canEditResult(row)} onClick={() => onSetResult(row, 'PASS')} />
+                  <ActionButton label="Fail" color="red" disabled={pendingIds.has(row.id) || !canEditResult(row)} onClick={() => onSetResult(row, 'FAIL')} />
+                  <ActionButton label="Blocked" color="amber" disabled={pendingIds.has(row.id) || !canEditResult(row)} onClick={() => onSetResult(row, 'BLOCKED')} />
+                  <ActionButton label="Skip" color="gray" disabled={pendingIds.has(row.id) || !canEditResult(row)} onClick={() => onSetResult(row, 'SKIPPED')} />
                 </div>
+                {(row.result === 'FAIL' || row.result === 'BLOCKED') ? (
+                  <div className="mt-2">
+                    <textarea
+                      value={notesById[row.id] ?? row.notes ?? ''}
+                      onChange={(e) => setNotesById((prev) => ({ ...prev, [row.id]: e.target.value }))}
+                      disabled={!canEditResult(row)}
+                      placeholder="Add notes for failure/blocked"
+                      className="w-full rounded border border-[#D6E0F5] p-2 text-xs disabled:bg-[#F5F8FF]"
+                      rows={2}
+                    />
+                    <div className="mt-1 flex justify-end">
+                      <button
+                        type="button"
+                        disabled={!canEditResult(row) || pendingIds.has(row.id)}
+                        onClick={() => onSetResult(row, row.result)}
+                        className="rounded border border-[#B0C0E0] px-2 py-1 text-xs text-[#1A3263] disabled:opacity-50"
+                      >
+                        Save Note
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

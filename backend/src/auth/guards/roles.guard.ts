@@ -3,13 +3,6 @@ import { Reflector } from '@nestjs/core';
 import { UserRole } from '@prisma/client';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 
-const ROLE_PRIORITY: Record<UserRole, number> = {
-  ADMIN: 4,
-  QA_MANAGER: 3,
-  TESTER: 2,
-  VIEWER: 1,
-};
-
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
@@ -31,9 +24,7 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('User role is missing from request context.');
     }
 
-    const hasPermission = requiredRoles.some(
-      (requiredRole) => ROLE_PRIORITY[userRole] >= ROLE_PRIORITY[requiredRole],
-    );
+    const hasPermission = requiredRoles.includes(userRole);
 
     if (!hasPermission) {
       throw new ForbiddenException('Insufficient role permissions.');
