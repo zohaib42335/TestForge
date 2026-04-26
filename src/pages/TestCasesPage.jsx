@@ -31,6 +31,7 @@ export default function TestCasesPage() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [busy, setBusy] = useState(false)
   const appliedMineForUserRef = useRef(null)
+  const mineOnly = searchParams.get('mine') === 'true'
   const [filters, setFilters] = useState({
     search: '',
     suiteId: '',
@@ -57,16 +58,17 @@ export default function TestCasesPage() {
   }, [projectId])
 
   useEffect(() => {
-    const shouldFilterMine = searchParams.get('mine') === 'true'
+    const shouldFilterMine = mineOnly
     const userId = currentUser?.id || null
     if (shouldFilterMine && userId && appliedMineForUserRef.current !== userId) {
       appliedMineForUserRef.current = userId
       applyFilters({ assignedToId: currentUser.id })
     }
-    if (!shouldFilterMine) {
+    if (!shouldFilterMine && appliedMineForUserRef.current !== null) {
+      applyFilters({ assignedToId: undefined })
       appliedMineForUserRef.current = null
     }
-  }, [searchParams, currentUser?.id, applyFilters])
+  }, [mineOnly, currentUser?.id, applyFilters])
 
   const isEmpty = !loading && testCases.length === 0
   const canManage = can('createTestCase')
@@ -104,6 +106,34 @@ export default function TestCasesPage() {
           <span className="rounded-full bg-[#EEF2FB] px-2 py-1 text-xs font-semibold text-[#1A3263]">
             {total}
           </span>
+          <div className="ml-2 inline-flex rounded-lg border border-[#D6E0F5] bg-white p-1">
+            <button
+              type="button"
+              onClick={() => {
+                const next = new URLSearchParams(searchParams.toString())
+                next.delete('mine')
+                setSearchParams(next, { replace: true })
+              }}
+              className={`rounded px-2 py-1 text-xs font-medium ${
+                mineOnly ? 'text-[#5A6E9A] hover:bg-[#F5F8FF]' : 'bg-[#EEF2FB] text-[#1A3263]'
+              }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const next = new URLSearchParams(searchParams.toString())
+                next.set('mine', 'true')
+                setSearchParams(next, { replace: true })
+              }}
+              className={`rounded px-2 py-1 text-xs font-medium ${
+                mineOnly ? 'bg-[#EEF2FB] text-[#1A3263]' : 'text-[#5A6E9A] hover:bg-[#F5F8FF]'
+              }`}
+            >
+              Mine
+            </button>
+          </div>
         </div>
         {headerActions}
       </div>
@@ -154,7 +184,7 @@ export default function TestCasesPage() {
           className="rounded border border-[#D6E0F5] px-3 py-2 text-sm text-[#1A3263]"
           onClick={() => {
             setFilters({ search: '', suiteId: '', status: '', priority: '' })
-            setSearchParams({})
+            setSearchParams(mineOnly ? { mine: 'true' } : {}, { replace: true })
             applyFilters({
               search: undefined,
               suiteId: undefined,

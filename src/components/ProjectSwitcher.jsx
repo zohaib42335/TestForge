@@ -26,19 +26,19 @@ export default function ProjectSwitcher() {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex min-w-[230px] max-w-[340px] items-center justify-between gap-2 rounded-lg border border-[#C8D7F1] bg-white px-3 py-2 text-left shadow-sm"
+        className="flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-[#C8D7F1] bg-white px-3 py-2 text-left shadow-sm"
       >
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-[#1A3263]">
-            {truncate(activeProject?.name || 'Select Project')}
+          <p className="max-w-[210px] break-words text-sm font-semibold leading-tight text-[#1A3263]">
+            {activeProject?.name || 'Select Project'}
           </p>
-          <p className="truncate text-[11px] text-[#5A6E9A]">{companyName}</p>
+          <p className="text-[11px] text-[#5A6E9A]">{companyName}</p>
         </div>
         <span className="text-xs text-[#1A3263]">{open ? '▲' : '▼'}</span>
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-full z-[120] mt-1 w-full rounded-lg border border-[#C8D7F1] bg-white py-1 shadow-lg">
+        <div className="mt-1 w-full rounded-lg border border-[#C8D7F1] bg-white py-1 shadow-lg">
           <div className="max-h-64 overflow-auto">
             {projects.map((project) => (
               <button
@@ -55,7 +55,7 @@ export default function ProjectSwitcher() {
                     : 'text-[#334A75] hover:bg-[#F5F8FF]'
                 }`}
               >
-                <span>{truncate(project.name)}</span>
+                <span className="block break-words">{project.name}</span>
                 {activeProject?.id === project.id ? <span className="ml-2 text-xs">✓</span> : null}
               </button>
             ))}

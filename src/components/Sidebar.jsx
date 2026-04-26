@@ -30,7 +30,6 @@ export default function Sidebar({ activeProjectId = null, mobileOpen = false, on
 
   const common = [
     { label: 'Dashboard', to: '/dashboard', icon: 'grid' },
-    { label: 'My Test Cases', to: projectPath(activeProjectId, '/test-cases?mine=true'), icon: 'clipboard' },
   ]
   const work = can('executeTestRun')
     ? [
