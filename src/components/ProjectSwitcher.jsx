@@ -22,7 +22,7 @@ export default function ProjectSwitcher() {
   const canCreateProjects = ['ADMIN', 'QA_MANAGER'].includes(role || '')
 
   return (
-    <div className="relative">
+    <div className="relative z-40">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
@@ -38,7 +38,7 @@ export default function ProjectSwitcher() {
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-full z-40 mt-1 w-full rounded-lg border border-[#C8D7F1] bg-white py-1 shadow-lg">
+        <div className="absolute left-0 top-full z-[120] mt-1 w-full rounded-lg border border-[#C8D7F1] bg-white py-1 shadow-lg">
           <div className="max-h-64 overflow-auto">
             {projects.map((project) => (
               <button

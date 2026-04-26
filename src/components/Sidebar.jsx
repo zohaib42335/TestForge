@@ -118,8 +118,8 @@ export default function Sidebar({ activeProjectId = null, mobileOpen = false, on
   }
 
   const content = (
-    <aside className={`h-full border-r border-[#D6E0F5] bg-white ${collapsed ? 'w-20' : 'w-72'}`}>
-      <div className="border-b border-[#D6E0F5] p-3">
+    <aside className={`h-full overflow-visible border-r border-[#D6E0F5] bg-white ${collapsed ? 'w-20' : 'w-72'}`}>
+      <div className="relative z-30 border-b border-[#D6E0F5] p-3">
         <div className="mb-2 flex items-center justify-between">
           {!collapsed ? <p className="text-sm font-semibold text-[#1A3263]">Navigation</p> : null}
           <button
@@ -133,7 +133,7 @@ export default function Sidebar({ activeProjectId = null, mobileOpen = false, on
         {!collapsed ? <ProjectSwitcher /> : null}
       </div>
 
-      <nav className="p-2">
+      <nav className="relative z-10 p-2">
         {[...common, ...work, ...reports, ...admin].map((item) => (
           <NavLink
             key={item.label}
