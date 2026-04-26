@@ -71,19 +71,40 @@ export default function TestCaseForm({
   const submit = async (event) => {
     event.preventDefault()
     const nextErrors = {}
+    const normalizedSteps = form.testSteps
+      .map((row) => ({
+        step: String(row.step || '').trim(),
+        expected: String(row.expected || '').trim(),
+      }))
+      .filter((row) => row.step || row.expected)
+
     if (!form.title.trim()) nextErrors.title = 'Title is required.'
-    if (!form.testSteps.some((row) => row.step.trim())) nextErrors.testSteps = 'At least one step is required.'
+    if (!normalizedSteps.length) nextErrors.testSteps = 'At least one step is required.'
+    if (normalizedSteps.some((row) => !row.step || !row.expected)) {
+      nextErrors.testSteps = 'Each step must include both action and expected outcome.'
+    }
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
 
-    await onSubmit({
-      ...form,
+    const payload = {
+      title: form.title,
+      description: form.description,
+      preConditions: form.preConditions,
+      expectedResult: form.expectedResult,
+      testType: form.testType,
+      priority: form.priority,
+      severity: form.severity,
+      assignedToId: form.assignedToId || undefined,
+      suiteId: form.suiteId || undefined,
       tags: String(form.tags || '')
         .split(',')
         .map((x) => x.trim())
         .filter(Boolean),
-      testSteps: form.testSteps.map((row, i) => ({ order: i + 1, action: row.step, expectedResult: row.expected })),
-    })
+      // Backend Create/Update DTO expects { step, expected }.
+      testSteps: normalizedSteps,
+    }
+
+    await onSubmit(payload)
   }
 
   return (
