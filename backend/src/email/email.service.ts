@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 
@@ -12,6 +12,35 @@ export class EmailService {
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
     this.resend = apiKey ? new Resend(apiKey) : null;
     this.fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL', 'TestForge <onboarding@resend.dev>');
+  }
+
+  getConfigHealth() {
+    const apiKey = this.configService.get<string>('RESEND_API_KEY') ?? '';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? '';
+    const fromEmail = this.fromEmail;
+    const apiKeyPresent = apiKey.trim().length > 0;
+    const fromEmailPresent = fromEmail.trim().length > 0;
+    const frontendUrlPresent = frontendUrl.trim().length > 0;
+    const usingDefaultFrom = fromEmail.includes('onboarding@resend.dev');
+
+    return {
+      healthy: apiKeyPresent && fromEmailPresent && frontendUrlPresent && !usingDefaultFrom,
+      checks: {
+        resendApiKeyPresent: apiKeyPresent,
+        resendFromEmailPresent: fromEmailPresent,
+        frontendUrlPresent,
+        usingDefaultResendSender: usingDefaultFrom,
+      },
+      values: {
+        resendFromEmail: fromEmail,
+        frontendUrl: frontendUrl || null,
+      },
+      message: apiKeyPresent
+        ? (usingDefaultFrom
+            ? 'RESEND_FROM_EMAIL is using the default resend.dev sender. Use a verified sender/domain for production delivery.'
+            : 'Email configuration is present.')
+        : 'RESEND_API_KEY is missing.',
+    };
   }
 
   async sendWelcomeEmail(
@@ -87,16 +116,25 @@ export class EmailService {
 
   private async sendEmail(to: string, subject: string, html: string): Promise<void> {
     if (!this.resend) {
-      this.logger.warn(`RESEND_API_KEY not set. Skipping email "${subject}" to ${to}.`);
-      return;
+      this.logger.error(`RESEND_API_KEY not set. Cannot send email "${subject}" to ${to}.`);
+      throw new ServiceUnavailableException(
+        'Email service is not configured. Please set RESEND_API_KEY and RESEND_FROM_EMAIL.',
+      );
     }
 
-    await this.resend.emails.send({
-      from: this.fromEmail,
-      to,
-      subject,
-      html,
-    });
+    try {
+      await this.resend.emails.send({
+        from: this.fromEmail,
+        to,
+        subject,
+        html,
+      });
+    } catch (error) {
+      this.logger.error(`Failed to send email "${subject}" to ${to}`, error instanceof Error ? error.stack : undefined);
+      throw new ServiceUnavailableException(
+        'Failed to send email. Verify Resend API key, sender domain, and recipient address.',
+      );
+    }
   }
 
   private wrapTemplate(title: string, content: string): string {

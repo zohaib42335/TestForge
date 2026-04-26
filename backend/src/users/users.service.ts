@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { InvitationStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -13,7 +13,7 @@ export class UsersService {
 
   async getCompanyUsers(companyId: string) {
     return this.prisma.user.findMany({
-      where: { companyId },
+      where: { companyId, isActive: true },
       select: {
         id: true,
         displayName: true,
@@ -78,17 +78,31 @@ export class UsersService {
       throw new NotFoundException('User not found.');
     }
 
-    return this.prisma.user.update({
-      where: { id: targetUserId },
-      data: { isActive: false },
-      select: {
-        id: true,
-        email: true,
-        displayName: true,
-        role: true,
-        isActive: true,
-      },
-    });
+    const [updatedUser] = await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: targetUserId },
+        data: { isActive: false },
+        select: {
+          id: true,
+          email: true,
+          displayName: true,
+          role: true,
+          isActive: true,
+        },
+      }),
+      this.prisma.invitation.updateMany({
+        where: {
+          companyId,
+          email: targetUser.email.toLowerCase(),
+          status: InvitationStatus.PENDING,
+        },
+        data: {
+          status: InvitationStatus.CANCELLED,
+        },
+      }),
+    ]);
+
+    return updatedUser;
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {

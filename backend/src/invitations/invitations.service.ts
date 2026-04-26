@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InvitationStatus, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -73,13 +74,20 @@ export class InvitationsService {
     });
 
     const inviteUrl = `${process.env.FRONTEND_URL ?? 'http://localhost:5173'}/accept-invite?token=${token}`;
-    await this.emailService.sendInvitationEmail(
-      normalizedEmail,
-      invitation.invitedBy.displayName,
-      invitation.company.name,
-      invitation.role,
-      inviteUrl,
-    );
+    try {
+      await this.emailService.sendInvitationEmail(
+        normalizedEmail,
+        invitation.invitedBy.displayName,
+        invitation.company.name,
+        invitation.role,
+        inviteUrl,
+      );
+    } catch (error) {
+      await this.prisma.invitation.delete({ where: { id: invitation.id } });
+      throw new ServiceUnavailableException(
+        'Invitation email could not be sent. Please verify email configuration and try again.',
+      );
+    }
 
     return invitation;
   }
@@ -227,13 +235,19 @@ export class InvitationsService {
     });
 
     const inviteUrl = `${process.env.FRONTEND_URL ?? 'http://localhost:5173'}/accept-invite?token=${updated.token}`;
-    await this.emailService.sendInvitationEmail(
-      updated.email,
-      updated.invitedBy.displayName,
-      updated.company.name,
-      updated.role,
-      inviteUrl,
-    );
+    try {
+      await this.emailService.sendInvitationEmail(
+        updated.email,
+        updated.invitedBy.displayName,
+        updated.company.name,
+        updated.role,
+        inviteUrl,
+      );
+    } catch (error) {
+      throw new ServiceUnavailableException(
+        'Invitation email could not be resent. Please verify email configuration and try again.',
+      );
+    }
 
     return updated;
   }
