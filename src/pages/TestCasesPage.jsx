@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { getSuites } from '../api/testSuites.api.js'
 import { getCompanyUsers } from '../api/users.api.js'
@@ -30,6 +30,7 @@ export default function TestCasesPage() {
   const [editing, setEditing] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [busy, setBusy] = useState(false)
+  const appliedMineForUserRef = useRef(null)
   const [filters, setFilters] = useState({
     search: '',
     suiteId: '',
@@ -56,8 +57,14 @@ export default function TestCasesPage() {
   }, [projectId])
 
   useEffect(() => {
-    if (searchParams.get('mine') === 'true' && currentUser?.id) {
+    const shouldFilterMine = searchParams.get('mine') === 'true'
+    const userId = currentUser?.id || null
+    if (shouldFilterMine && userId && appliedMineForUserRef.current !== userId) {
+      appliedMineForUserRef.current = userId
       applyFilters({ assignedToId: currentUser.id })
+    }
+    if (!shouldFilterMine) {
+      appliedMineForUserRef.current = null
     }
   }, [searchParams, currentUser?.id, applyFilters])
 

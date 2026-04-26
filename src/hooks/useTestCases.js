@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   approveTestCase as approveTestCaseApi,
   bulkUpdateStatus as bulkUpdateStatusApi,
@@ -84,10 +84,23 @@ export function useTestCases(projectId, initialFilters = {}) {
   })
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
+  const filtersRef = useRef(filters)
+
+  const mergeFilters = useCallback((base, override = {}) => {
+    const merged = { ...base, ...override }
+    let changed = false
+    for (const key of Object.keys(merged)) {
+      if (base[key] !== merged[key]) {
+        changed = true
+        break
+      }
+    }
+    return { merged, changed }
+  }, [])
 
   const refetch = useCallback(async (override = {}) => {
     if (!projectId) return
-    const params = { ...filters, ...override }
+    const { merged: params } = mergeFilters(filtersRef.current, override)
     setLoading(true)
     setError('')
     try {
@@ -95,11 +108,22 @@ export function useTestCases(projectId, initialFilters = {}) {
       setTestCases(Array.isArray(data?.items) ? data.items : [])
       setTotal(Number(data?.total || 0))
       setTotalPages(Number(data?.totalPages || 1))
-      setFilters((prev) => ({ ...prev, ...override }))
+      setFilters((prev) => {
+        const { merged, changed } = mergeFilters(prev, override)
+        if (!changed) return prev
+        filtersRef.current = merged
+        return merged
+      })
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || 'Failed to load test cases')
     } finally {
       setLoading(false)
     }
-  }, [projectId, filters])
+  }, [projectId, mergeFilters])
+
+  useEffect(() => {
+    filtersRef.current = filters
+  }, [filters])
 
   useEffect(() => {
     void refetch()
