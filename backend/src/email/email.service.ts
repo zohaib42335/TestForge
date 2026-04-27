@@ -11,7 +11,11 @@ export class EmailService {
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
     this.resend = apiKey ? new Resend(apiKey) : null;
-    this.fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL', 'TestForge <onboarding@resend.dev>');
+    // Support both legacy FROM_EMAIL and explicit RESEND_FROM_EMAIL names.
+    this.fromEmail =
+      this.configService.get<string>('RESEND_FROM_EMAIL')
+      || this.configService.get<string>('FROM_EMAIL')
+      || 'TestForge <onboarding@resend.dev>';
   }
 
   getConfigHealth() {
