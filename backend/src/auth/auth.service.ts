@@ -6,9 +6,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Plan, SubscriptionStatus, UserRole } from '@prisma/client';
+import { InvitationStatus, Plan, Prisma, SubscriptionStatus, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { OAuth2Client } from 'google-auth-library';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -17,6 +18,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SignupDto } from './dto/signup.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 import { PLAN_LIMITS } from '../common/utils/plan-limits.util';
 
 type JwtPayload = {
@@ -33,6 +35,123 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
   ) {}
+
+  async loginWithGoogle(dto: GoogleLoginDto) {
+    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID', '').trim();
+    if (!clientId) {
+      throw new UnauthorizedException('Google sign-in is not configured.');
+    }
+
+    const oauthClient = new OAuth2Client(clientId);
+    const ticket = await oauthClient.verifyIdToken({
+      idToken: dto.idToken,
+      audience: clientId,
+    });
+    const payload = ticket.getPayload();
+    const email = String(payload?.email || '').toLowerCase().trim();
+    const emailVerified = Boolean(payload?.email_verified);
+    const googleSub = String(payload?.sub || '').trim();
+    const displayNameRaw = String(payload?.name || payload?.given_name || '').trim();
+
+    if (!email || !googleSub) {
+      throw new UnauthorizedException('Invalid Google token.');
+    }
+    if (!emailVerified) {
+      throw new UnauthorizedException('Google email is not verified.');
+    }
+
+    const pendingInvite = await this.prisma.invitation.findFirst({
+      where: {
+        email,
+        status: InvitationStatus.PENDING,
+        expiresAt: { gt: new Date() },
+      },
+      include: { company: true },
+    });
+
+    let user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user && !pendingInvite) {
+      throw new UnauthorizedException(
+        "This email isn’t invited yet. Ask your admin to send an invitation.",
+      );
+    }
+
+    // If invited but user doesn't exist, create user in invited company with invited role.
+    if (!user && pendingInvite) {
+      const randomPassword = crypto.randomBytes(24).toString('hex');
+      const passwordHash = await bcrypt.hash(randomPassword, 12);
+      const displayName = displayNameRaw || email.split('@')[0] || 'User';
+
+      user = await this.prisma.user.create({
+        data: {
+          companyId: pendingInvite.companyId,
+          email,
+          passwordHash,
+          displayName,
+          role: pendingInvite.role,
+          emailVerified: true,
+          isActive: true,
+          googleSub,
+        },
+      });
+
+      await this.prisma.invitation.update({
+        where: { id: pendingInvite.id },
+        data: { status: InvitationStatus.ACCEPTED },
+      });
+
+      if (user.role === UserRole.QA_MANAGER) {
+        const companyProjects = await this.prisma.project.findMany({
+          where: { companyId: user.companyId, isArchived: false },
+          select: { id: true },
+        });
+        if (companyProjects.length > 0) {
+          await this.prisma.projectMember.createMany({
+            data: companyProjects.map((p) => ({
+              projectId: p.id,
+              userId: user!.id,
+              projectRole: user!.role,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+    }
+
+    if (!user) {
+      throw new UnauthorizedException('User not found.');
+    }
+
+    // Auto-link by email: if googleSub missing, set it. If present and mismatch, block.
+    const existingGoogleSub = (user as any).googleSub as string | undefined;
+    if (existingGoogleSub && existingGoogleSub !== googleSub) {
+      throw new UnauthorizedException('This email is linked to a different Google account.');
+    }
+    if (!existingGoogleSub) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { googleSub } as any,
+      });
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date(), isActive: true },
+    });
+
+    const tokens = await this.generateTokens(user.id, user.companyId, user.role);
+    const company = pendingInvite?.company
+      ?? (await this.prisma.company.findUnique({
+        where: { id: user.companyId },
+        select: { id: true, name: true, slug: true, plan: true },
+      }));
+
+    return {
+      ...tokens,
+      user: this.toUserProfile(user),
+      ...(company ? { company } : {}),
+    };
+  }
 
   async signup(dto: SignupDto) {
     const existingUser = await this.prisma.user.findUnique({

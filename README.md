@@ -1,16 +1,30 @@
-# React + Vite
+# TestForge
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+QA test case manager with projects, suites, cases, runs, reports, and team management.
 
-Currently, two official plugins are available:
+## Google Sign-In setup (invite-only)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+This repo supports **Sign in with Google** using **Google Identity Services**.  
+Google sign-in is **restricted to existing users or invited emails**.
 
-## React Compiler
+### 1) Create Google OAuth client
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+In Google Cloud Console:
+- Create an OAuth 2.0 Client ID (Web application)
+- Add **Authorized JavaScript origins**:
+  - `http://localhost:5173`
+  - Your deployed frontend origin (matches backend `FRONTEND_URL`)
 
-## Expanding the ESLint configuration
+### 2) Configure environment variables
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Frontend (Vite):
+- `VITE_GOOGLE_CLIENT_ID` = your Google OAuth client id
+
+Backend:
+- `GOOGLE_CLIENT_ID` = the same Google OAuth client id
+
+### 3) Behavior
+
+- If the email already exists in your company, Google sign-in logs the user in.
+- If the email has a pending invitation, Google sign-in creates the user in the invited company and marks the invitation accepted.
+- If the email is neither an existing user nor invited, the login is rejected.

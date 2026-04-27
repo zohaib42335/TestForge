@@ -17,6 +17,11 @@ export async function login(data) {
   return unwrap(response)
 }
 
+export async function googleLogin(idToken) {
+  const response = await api.post('/auth/google', { idToken })
+  return unwrap(response)
+}
+
 export async function logout(refreshToken) {
   const response = await api.post('/auth/logout', { refreshToken })
   return unwrap(response)

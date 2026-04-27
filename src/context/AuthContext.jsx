@@ -3,6 +3,7 @@ import {
   apiClient,
   getAccessToken,
   getMe,
+  googleLogin as googleLoginApi,
   login as loginApi,
   logout as logoutApi,
   refreshToken as refreshTokenApi,
@@ -123,6 +124,12 @@ export function AuthProvider({ children }) {
     return data?.user ?? null
   }, [applySession])
 
+  const loginWithGoogle = useCallback(async (idToken) => {
+    const data = await googleLoginApi(idToken)
+    applySession(data)
+    return data?.user ?? null
+  }, [applySession])
+
   const signup = useCallback(async ({ displayName, email, password, companyName }) => {
     const data = await signupApi({ displayName, email, password, companyName })
     applySession(data)
@@ -188,6 +195,7 @@ export function AuthProvider({ children }) {
       currentUser: userProfile,
       userProfile,
       login,
+      loginWithGoogle,
       signup,
       logout,
       consumeAuthPayload,
@@ -201,6 +209,7 @@ export function AuthProvider({ children }) {
     [
       userProfile,
       login,
+      loginWithGoogle,
       signup,
       logout,
       consumeAuthPayload,

@@ -16,6 +16,9 @@ export class EmailService {
       this.configService.get<string>('RESEND_FROM_EMAIL')
       || this.configService.get<string>('FROM_EMAIL')
       || 'TestForge <onboarding@resend.dev>';
+    // #region agent log
+    fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H2',location:'email.service.ts:20',message:'email service initialized',data:{resendClientPresent:Boolean(this.resend),fromEmailConfigured:Boolean(this.fromEmail),fromDomain:String(this.fromEmail).includes('@')?String(this.fromEmail).split('@').pop()?.replace('>','').trim():null,usingResendFromEmailKey:Boolean(this.configService.get<string>('RESEND_FROM_EMAIL')),usingFromEmailKey:Boolean(this.configService.get<string>('FROM_EMAIL'))},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
   }
 
   getConfigHealth() {
@@ -119,6 +122,9 @@ export class EmailService {
   }
 
   private async sendEmail(to: string, subject: string, html: string): Promise<void> {
+    // #region agent log
+    fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H3',location:'email.service.ts:126',message:'sendEmail called',data:{resendClientPresent:Boolean(this.resend),subjectPrefix:String(subject||'').slice(0,30),toDomain:String(to||'').split('@')[1]||null,fromDomain:String(this.fromEmail).includes('@')?String(this.fromEmail).split('@').pop()?.replace('>','').trim():null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (!this.resend) {
       this.logger.error(`RESEND_API_KEY not set. Cannot send email "${subject}" to ${to}.`);
       throw new ServiceUnavailableException(
@@ -126,14 +132,33 @@ export class EmailService {
       );
     }
 
+    const normalizedFrom = String(this.fromEmail || '').toLowerCase();
+    if (normalizedFrom.includes('onboarding@resend.dev')) {
+      // #region agent log
+      fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'post-fix',hypothesisId:'H8',location:'email.service.ts:138',message:'blocked sandbox sender for external delivery',data:{fromDomain:'resend.dev',toDomain:String(to||'').split('@')[1]||null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      throw new ServiceUnavailableException(
+        'Invite email delivery is blocked: configure RESEND_FROM_EMAIL with a verified sender/domain (not onboarding@resend.dev).',
+      );
+    }
+
     try {
-      await this.resend.emails.send({
+      const result = await this.resend.emails.send({
         from: this.fromEmail,
         to,
         subject,
         html,
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H3',location:'email.service.ts:144',message:'resend send succeeded',data:{subjectPrefix:String(subject||'').slice(0,30),toDomain:String(to||'').split('@')[1]||null,resultKeys:result && typeof result === 'object' ? Object.keys(result) : null,hasError:Boolean(result && typeof result === 'object' && 'error' in result && (result).error),hasData:Boolean(result && typeof result === 'object' && 'data' in result && (result).data),providerId:(result && typeof result === 'object' && 'data' in result && (result).data && typeof (result).data === 'object' && 'id' in (result).data) ? (result).data.id : null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      if (result && typeof result === 'object' && 'error' in result && (result).error) {
+        throw new Error('Resend returned error response');
+      }
     } catch (error) {
+      // #region agent log
+      fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H3',location:'email.service.ts:148',message:'resend send failed',data:{errorName:error instanceof Error ? error.name : typeof error,errorMessage:error instanceof Error ? error.message : 'unknown'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       this.logger.error(`Failed to send email "${subject}" to ${to}`, error instanceof Error ? error.stack : undefined);
       throw new ServiceUnavailableException(
         'Failed to send email. Verify Resend API key, sender domain, and recipient address.',

@@ -25,8 +25,21 @@ export async function updateMyProfile(displayName) {
 }
 
 export async function inviteUser(data) {
-  const response = await api.post('/invitations', data)
-  return unwrap(response)
+  // #region agent log
+  fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H6',location:'users.api.js:29',message:'frontend inviteUser request start',data:{baseURL:api?.defaults?.baseURL||null,emailDomain:String(data?.email||'').split('@')[1]||null,role:data?.role||null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  try {
+    const response = await api.post('/invitations', data)
+    // #region agent log
+    fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H6',location:'users.api.js:34',message:'frontend inviteUser response success',data:{status:response?.status||null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return unwrap(response)
+  } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H6',location:'users.api.js:39',message:'frontend inviteUser response error',data:{status:error?.response?.status||null,errorCode:error?.response?.data?.error?.code||null,errorMessage:error?.response?.data?.error?.message||error?.message||'unknown'},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    throw error
+  }
 }
 
 export async function getPendingInvitations() {
