@@ -12,6 +12,7 @@ export default function InviteModal({ open, onClose, onInvited }) {
   const [role, setRole] = useState('TESTER')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [warning, setWarning] = useState('')
   const [error, setError] = useState('')
 
   const canSubmit = useMemo(() => email.trim() && role && !loading, [email, role, loading])
@@ -22,17 +23,32 @@ export default function InviteModal({ open, onClose, onInvited }) {
     setLoading(true)
     setError('')
     setMessage('')
+    setWarning('')
     try {
       const payload = { email: email.trim(), role }
       const data = await inviteUser(payload)
-      setMessage(`Invitation sent to ${data?.email || payload.email}`)
+      const invitedEmail = data?.email || payload.email
+
+      if (data?.emailSent === false) {
+        // Invitation created in DB but email delivery failed — show amber warning
+        setWarning(
+          `Invitation created for ${invitedEmail}, but the email could not be delivered. ` +
+          `The invitee appears in Pending Invitations — share the invite link with them directly.`
+        )
+      } else {
+        setMessage(`Invitation sent to ${invitedEmail}`)
+      }
+
       setEmail('')
       setRole('TESTER')
       if (typeof onInvited === 'function') {
         await onInvited()
       }
     } catch (err) {
-      const backendMessage = err?.response?.data?.error?.message
+      const backendMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        err?.response?.data?.error
       setError(backendMessage || 'Could not send invitation.')
     } finally {
       setLoading(false)
@@ -69,6 +85,11 @@ export default function InviteModal({ open, onClose, onInvited }) {
           </div>
 
           {message ? <p className="text-sm text-green-700">{message}</p> : null}
+          {warning ? (
+            <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              ⚠️ {warning}
+            </p>
+          ) : null}
           {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
           <div className="flex justify-end gap-2">

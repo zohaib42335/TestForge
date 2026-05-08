@@ -1,4 +1,8 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 
@@ -13,11 +17,38 @@ export class EmailService {
     this.resend = apiKey ? new Resend(apiKey) : null;
     // Support both legacy FROM_EMAIL and explicit RESEND_FROM_EMAIL names.
     this.fromEmail =
-      this.configService.get<string>('RESEND_FROM_EMAIL')
-      || this.configService.get<string>('FROM_EMAIL')
-      || 'TestForge <onboarding@resend.dev>';
+      this.configService.get<string>('RESEND_FROM_EMAIL') ||
+      this.configService.get<string>('FROM_EMAIL') ||
+      'TestForge <onboarding@resend.dev>';
     // #region agent log
-    fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H2',location:'email.service.ts:20',message:'email service initialized',data:{resendClientPresent:Boolean(this.resend),fromEmailConfigured:Boolean(this.fromEmail),fromDomain:String(this.fromEmail).includes('@')?String(this.fromEmail).split('@').pop()?.replace('>','').trim():null,usingResendFromEmailKey:Boolean(this.configService.get<string>('RESEND_FROM_EMAIL')),usingFromEmailKey:Boolean(this.configService.get<string>('FROM_EMAIL'))},timestamp:Date.now()})}).catch(()=>{});
+    fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': 'a35e5a',
+      },
+      body: JSON.stringify({
+        sessionId: 'a35e5a',
+        runId: 'pre-fix',
+        hypothesisId: 'H2',
+        location: 'email.service.ts:20',
+        message: 'email service initialized',
+        data: {
+          resendClientPresent: Boolean(this.resend),
+          fromEmailConfigured: Boolean(this.fromEmail),
+          fromDomain: String(this.fromEmail).includes('@')
+            ? String(this.fromEmail).split('@').pop()?.replace('>', '').trim()
+            : null,
+          usingResendFromEmailKey: Boolean(
+            this.configService.get<string>('RESEND_FROM_EMAIL'),
+          ),
+          usingFromEmailKey: Boolean(
+            this.configService.get<string>('FROM_EMAIL'),
+          ),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
     // #endregion
   }
 
@@ -31,7 +62,11 @@ export class EmailService {
     const usingDefaultFrom = fromEmail.includes('onboarding@resend.dev');
 
     return {
-      healthy: apiKeyPresent && fromEmailPresent && frontendUrlPresent && !usingDefaultFrom,
+      healthy:
+        apiKeyPresent &&
+        fromEmailPresent &&
+        frontendUrlPresent &&
+        !usingDefaultFrom,
       checks: {
         resendApiKeyPresent: apiKeyPresent,
         resendFromEmailPresent: fromEmailPresent,
@@ -43,9 +78,9 @@ export class EmailService {
         frontendUrl: frontendUrl || null,
       },
       message: apiKeyPresent
-        ? (usingDefaultFrom
-            ? 'RESEND_FROM_EMAIL is using the default resend.dev sender. Use a verified sender/domain for production delivery.'
-            : 'Email configuration is present.')
+        ? usingDefaultFrom
+          ? 'RESEND_FROM_EMAIL is using the default resend.dev sender. Use a verified sender/domain for production delivery.'
+          : 'Email configuration is present.'
         : 'RESEND_API_KEY is missing.',
     };
   }
@@ -62,27 +97,45 @@ export class EmailService {
          </p>`
       : '';
 
-    await this.sendEmail(to, 'Welcome to TestForge', `
-      ${this.wrapTemplate('Welcome to TestForge', `
+    await this.sendEmail(
+      to,
+      'Welcome to TestForge',
+      `
+      ${this.wrapTemplate(
+        'Welcome to TestForge',
+        `
         <p>Hi ${this.escape(displayName)},</p>
         <p>Welcome to <strong>TestForge</strong>. Your workspace for <strong>${this.escape(companyName)}</strong> is ready.</p>
         ${cta}
         <p>You can now start creating projects, managing test cases, and collaborating with your QA team.</p>
-      `)}
-    `);
+      `,
+      )}
+    `,
+    );
   }
 
-  async sendPasswordResetEmail(to: string, displayName: string, resetUrl: string): Promise<void> {
-    await this.sendEmail(to, 'Reset your TestForge password', `
-      ${this.wrapTemplate('Reset your password', `
+  async sendPasswordResetEmail(
+    to: string,
+    displayName: string,
+    resetUrl: string,
+  ): Promise<void> {
+    await this.sendEmail(
+      to,
+      'Reset your TestForge password',
+      `
+      ${this.wrapTemplate(
+        'Reset your password',
+        `
         <p>Hi ${this.escape(displayName)},</p>
         <p>We received a request to reset your password. If this was you, click below:</p>
         <p style="margin: 0 0 24px;">
           <a href="${resetUrl}" style="display:inline-block;background:#1A3263;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:600;">Reset password</a>
         </p>
         <p>This link expires in 1 hour. If you did not request this, you can ignore this email.</p>
-      `)}
-    `);
+      `,
+      )}
+    `,
+    );
   }
 
   async sendInvitationEmail(
@@ -92,14 +145,21 @@ export class EmailService {
     role: string,
     inviteUrl: string,
   ): Promise<void> {
-    await this.sendEmail(to, `You're invited to ${companyName} on TestForge`, `
-      ${this.wrapTemplate('You have been invited', `
+    await this.sendEmail(
+      to,
+      `You're invited to ${companyName} on TestForge`,
+      `
+      ${this.wrapTemplate(
+        'You have been invited',
+        `
         <p>${this.escape(inviterName)} invited you to join <strong>${this.escape(companyName)}</strong> as <strong>${this.escape(role)}</strong>.</p>
         <p style="margin: 0 0 24px;">
           <a href="${inviteUrl}" style="display:inline-block;background:#1A3263;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:600;">Accept invitation</a>
         </p>
-      `)}
-    `);
+      `,
+      )}
+    `,
+    );
   }
 
   async sendTestCaseAssignedEmail(
@@ -110,23 +170,58 @@ export class EmailService {
     testTitle: string,
     projectName: string,
   ): Promise<void> {
-    await this.sendEmail(to, `New Test Case Assigned: ${testCaseRef}`, `
-      ${this.wrapTemplate('A test case was assigned to you', `
+    await this.sendEmail(
+      to,
+      `New Test Case Assigned: ${testCaseRef}`,
+      `
+      ${this.wrapTemplate(
+        'A test case was assigned to you',
+        `
         <p>Hi ${this.escape(assigneeName)},</p>
         <p><strong>${this.escape(assignerName)}</strong> assigned you a test case in <strong>${this.escape(projectName)}</strong>.</p>
         <div style="padding: 12px; background: #F7F9FC; border: 1px solid #E1E8F5; border-radius: 8px; margin: 16px 0;">
           <p style="margin: 0;"><strong>${this.escape(testCaseRef)}</strong> — ${this.escape(testTitle)}</p>
         </div>
-      `)}
-    `);
+      `,
+      )}
+    `,
+    );
   }
 
-  private async sendEmail(to: string, subject: string, html: string): Promise<void> {
+  private async sendEmail(
+    to: string,
+    subject: string,
+    html: string,
+  ): Promise<void> {
     // #region agent log
-    fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H3',location:'email.service.ts:126',message:'sendEmail called',data:{resendClientPresent:Boolean(this.resend),subjectPrefix:String(subject||'').slice(0,30),toDomain:String(to||'').split('@')[1]||null,fromDomain:String(this.fromEmail).includes('@')?String(this.fromEmail).split('@').pop()?.replace('>','').trim():null},timestamp:Date.now()})}).catch(()=>{});
+    fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': 'a35e5a',
+      },
+      body: JSON.stringify({
+        sessionId: 'a35e5a',
+        runId: 'pre-fix',
+        hypothesisId: 'H3',
+        location: 'email.service.ts:126',
+        message: 'sendEmail called',
+        data: {
+          resendClientPresent: Boolean(this.resend),
+          subjectPrefix: String(subject || '').slice(0, 30),
+          toDomain: String(to || '').split('@')[1] || null,
+          fromDomain: String(this.fromEmail).includes('@')
+            ? String(this.fromEmail).split('@').pop()?.replace('>', '').trim()
+            : null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
     // #endregion
     if (!this.resend) {
-      this.logger.error(`RESEND_API_KEY not set. Cannot send email "${subject}" to ${to}.`);
+      this.logger.error(
+        `RESEND_API_KEY not set. Cannot send email "${subject}" to ${to}.`,
+      );
       throw new ServiceUnavailableException(
         'Email service is not configured. Please set RESEND_API_KEY and RESEND_FROM_EMAIL.',
       );
@@ -135,7 +230,28 @@ export class EmailService {
     const normalizedFrom = String(this.fromEmail || '').toLowerCase();
     if (normalizedFrom.includes('onboarding@resend.dev')) {
       // #region agent log
-      fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'post-fix',hypothesisId:'H8',location:'email.service.ts:138',message:'blocked sandbox sender for external delivery',data:{fromDomain:'resend.dev',toDomain:String(to||'').split('@')[1]||null},timestamp:Date.now()})}).catch(()=>{});
+      fetch(
+        'http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Debug-Session-Id': 'a35e5a',
+          },
+          body: JSON.stringify({
+            sessionId: 'a35e5a',
+            runId: 'post-fix',
+            hypothesisId: 'H8',
+            location: 'email.service.ts:138',
+            message: 'blocked sandbox sender for external delivery',
+            data: {
+              fromDomain: 'resend.dev',
+              toDomain: String(to || '').split('@')[1] || null,
+            },
+            timestamp: Date.now(),
+          }),
+        },
+      ).catch(() => {});
       // #endregion
       throw new ServiceUnavailableException(
         'Invite email delivery is blocked: configure RESEND_FROM_EMAIL with a verified sender/domain (not onboarding@resend.dev).',
@@ -150,18 +266,100 @@ export class EmailService {
         html,
       });
       // #region agent log
-      fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H3',location:'email.service.ts:144',message:'resend send succeeded',data:{subjectPrefix:String(subject||'').slice(0,30),toDomain:String(to||'').split('@')[1]||null,resultKeys:result && typeof result === 'object' ? Object.keys(result) : null,hasError:Boolean(result && typeof result === 'object' && 'error' in result && (result).error),hasData:Boolean(result && typeof result === 'object' && 'data' in result && (result).data),providerId:(result && typeof result === 'object' && 'data' in result && (result).data && typeof (result).data === 'object' && 'id' in (result).data) ? (result).data.id : null},timestamp:Date.now()})}).catch(()=>{});
+      fetch(
+        'http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Debug-Session-Id': 'a35e5a',
+          },
+          body: JSON.stringify({
+            sessionId: 'a35e5a',
+            runId: 'pre-fix',
+            hypothesisId: 'H3',
+            location: 'email.service.ts:144',
+            message: 'resend send succeeded',
+            data: {
+              subjectPrefix: String(subject || '').slice(0, 30),
+              toDomain: String(to || '').split('@')[1] || null,
+              resultKeys:
+                result && typeof result === 'object'
+                  ? Object.keys(result)
+                  : null,
+              hasError: Boolean(
+                result &&
+                typeof result === 'object' &&
+                'error' in result &&
+                result.error,
+              ),
+              hasData: Boolean(
+                result &&
+                typeof result === 'object' &&
+                'data' in result &&
+                result.data,
+              ),
+              providerId:
+                result &&
+                typeof result === 'object' &&
+                'data' in result &&
+                result.data &&
+                typeof result.data === 'object' &&
+                'id' in result.data
+                  ? result.data.id
+                  : null,
+            },
+            timestamp: Date.now(),
+          }),
+        },
+      ).catch(() => {});
       // #endregion
-      if (result && typeof result === 'object' && 'error' in result && (result).error) {
-        throw new Error('Resend returned error response');
+      if (
+        result &&
+        typeof result === 'object' &&
+        'error' in result &&
+        result.error
+      ) {
+        const resendError = (result as any).error;
+        const errorMessage =
+          resendError?.message || JSON.stringify(resendError);
+        this.logger.error(
+          `Resend API error for email to ${to}: ${errorMessage}`,
+          { subject, from: this.fromEmail, error: resendError },
+        );
+        throw new Error(`Resend API error: ${errorMessage}`);
       }
     } catch (error) {
       // #region agent log
-      fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H3',location:'email.service.ts:148',message:'resend send failed',data:{errorName:error instanceof Error ? error.name : typeof error,errorMessage:error instanceof Error ? error.message : 'unknown'},timestamp:Date.now()})}).catch(()=>{});
+      fetch(
+        'http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Debug-Session-Id': 'a35e5a',
+          },
+          body: JSON.stringify({
+            sessionId: 'a35e5a',
+            runId: 'pre-fix',
+            hypothesisId: 'H3',
+            location: 'email.service.ts:148',
+            message: 'resend send failed',
+            data: {
+              errorName: error instanceof Error ? error.name : typeof error,
+              errorMessage: error instanceof Error ? error.message : 'unknown',
+            },
+            timestamp: Date.now(),
+          }),
+        },
+      ).catch(() => {});
       // #endregion
-      this.logger.error(`Failed to send email "${subject}" to ${to}`, error instanceof Error ? error.stack : undefined);
+      this.logger.error(
+        `Failed to send email "${subject}" to ${to}`,
+        error instanceof Error ? error.stack : String(error),
+      );
       throw new ServiceUnavailableException(
-        'Failed to send email. Verify Resend API key, sender domain, and recipient address.',
+        `Failed to send email. ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }

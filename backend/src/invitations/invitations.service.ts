@@ -3,7 +3,6 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InvitationStatus, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -23,9 +22,6 @@ export class InvitationsService {
   ) {}
 
   async inviteUser(companyId: string, invitedById: string, dto: InviteUserDto) {
-    // #region agent log
-    fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H1',location:'invitations.service.ts:26',message:'inviteUser entered',data:{companyIdPresent:Boolean(companyId),invitedByPresent:Boolean(invitedById),role:dto?.role,emailDomain:String(dto?.email||'').split('@')[1]||null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const company = await this.prisma.company.findUnique({ where: { id: companyId } });
     if (!company) {
       throw new NotFoundException('Company not found.');
@@ -75,15 +71,12 @@ export class InvitationsService {
         company: true,
       },
     });
-    // #region agent log
-    fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H4',location:'invitations.service.ts:76',message:'invitation row created',data:{invitationIdPresent:Boolean(invitation?.id),status:invitation?.status,emailDomain:String(normalizedEmail||'').split('@')[1]||null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     const inviteUrl = `${process.env.FRONTEND_URL ?? 'http://localhost:5173'}/accept-invite?token=${token}`;
+    let emailSent = true;
+    let emailWarning: string | undefined;
+
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H1',location:'invitations.service.ts:81',message:'calling sendInvitationEmail',data:{inviteUrlHost:(()=>{try{return new URL(inviteUrl).host;}catch{return null;}})()},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       await this.emailService.sendInvitationEmail(
         normalizedEmail,
         invitation.invitedBy.displayName,
@@ -91,23 +84,17 @@ export class InvitationsService {
         invitation.role,
         inviteUrl,
       );
-      // #region agent log
-      fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H1',location:'invitations.service.ts:91',message:'sendInvitationEmail returned success',data:{invitationIdPresent:Boolean(invitation?.id)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
     } catch (error) {
-      // #region agent log
-      fetch('http://127.0.0.1:7288/ingest/58efaff7-7b60-468a-a7ce-93907124bf9b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a35e5a'},body:JSON.stringify({sessionId:'a35e5a',runId:'pre-fix',hypothesisId:'H4',location:'invitations.service.ts:94',message:'sendInvitationEmail threw',data:{errorName:error instanceof Error ? error.name : typeof error,errorMessage:error instanceof Error ? error.message : 'unknown'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      await this.prisma.invitation.delete({ where: { id: invitation.id } });
-      if (error instanceof ServiceUnavailableException) {
-        throw error;
-      }
-      throw new ServiceUnavailableException(
-        'Invitation email could not be sent. Please verify email configuration and try again.',
-      );
+      // Invitation record is intentionally kept even when email delivery fails.
+      // This allows the admin to share the invite link manually.
+      emailSent = false;
+      emailWarning =
+        error instanceof Error
+          ? error.message
+          : 'Invitation email could not be sent. Please configure RESEND_FROM_EMAIL with a verified sender/domain.';
     }
 
-    return invitation;
+    return { ...invitation, emailSent, ...(emailWarning ? { emailWarning } : {}) };
   }
 
   async acceptInvitation(token: string, dto: AcceptInvitationDto) {
@@ -253,6 +240,9 @@ export class InvitationsService {
     });
 
     const inviteUrl = `${process.env.FRONTEND_URL ?? 'http://localhost:5173'}/accept-invite?token=${updated.token}`;
+    let emailSent = true;
+    let emailWarning: string | undefined;
+
     try {
       await this.emailService.sendInvitationEmail(
         updated.email,
@@ -262,11 +252,13 @@ export class InvitationsService {
         inviteUrl,
       );
     } catch (error) {
-      throw new ServiceUnavailableException(
-        'Invitation email could not be resent. Please verify email configuration and try again.',
-      );
+      emailSent = false;
+      emailWarning =
+        error instanceof Error
+          ? error.message
+          : 'Invitation email could not be resent. Please configure RESEND_FROM_EMAIL with a verified sender/domain.';
     }
 
-    return updated;
+    return { ...updated, emailSent, ...(emailWarning ? { emailWarning } : {}) };
   }
 }
